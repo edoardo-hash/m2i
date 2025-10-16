@@ -1,221 +1,320 @@
-// pages/index.tsx
-import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 
-type Season = "all" | "annual" | "summer" | "winter";
+/**
+ * Assets expected in /public:
+ *  - es-vedra-hero.jpg        (Es Vedrà hero image)
+ *  - move2ibiza-logo.png      (transparent logo)
+ */
 
-type Card = {
-  title: string;
-  destination?: string;
+type VillaItem = {
+  slug?: string;
+  title?: string;
+  location?: string;
   city?: string;
-  cover: string;
-  slug: string;
+  destination?: string;
+  cover?: string;
+  images?: string[];
+  photos?: Array<{ url?: string; src?: string }>;
+  gallery?: Array<{ url?: string; src?: string }>;
   meta?: {
     bedrooms?: number;
     bathrooms?: number;
     guests?: number;
-    prices?: { annual?: string; summer?: string; winter?: string };
-    updated?: string;
+    prices?: { annual?: string | number; monthly?: string | number };
   };
 };
 
-// Ibiza is the only destination we support on Move2Ibiza
-const DEST = "ibiza";
+/* ========= Tiny inline icons for the card meta ========= */
+const IconBed = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <path d="M3 7h18M6 7v7m12-7v7M3 14h18v3H3z" strokeWidth="1.5" />
+  </svg>
+);
+const IconBath = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <path d="M7 10V6a2 2 0 1 1 4 0v4m7 0H4v5a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-5Z" strokeWidth="1.5" />
+  </svg>
+);
+const IconUsers = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm8 10v-2a4 4 0 0 0-3-3.87M17 11a4 4 0 0 0-1-2.62" strokeWidth="1.5"/>
+  </svg>
+);
 
 export default function Home() {
-  // UI filters
-  const [season, setSeason] = useState<Season>("all");
-  const [minRent, setMinRent] = useState<number | "">("");
-  const [maxRent, setMaxRent] = useState<number | "">("");
-  const [beds, setBeds] = useState<number>(3);
+  const [villas, setVillas] = useState<VillaItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Data
-  const [villas, setVillas] = useState<Card[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  // ---------- helpers ----------
+  function firstImage(v: VillaItem): string | undefined {
+    if (v.cover) return v.cover;
+    if (v.images?.[0]) return v.images[0];
+    const p = v.photos?.find((x) => x.url || x.src);
+    if (p?.url || p?.src) return (p.url || p.src) as string;
+    const g = v.gallery?.find((x) => x.url || x.src);
+    return (g?.url || g?.src) as string | undefined;
+  }
+  function loc(v: VillaItem) {
+    return v.location || v.city || v.destination || "Ibiza";
+  }
+  function beds(v: VillaItem) {
+    return v.meta?.bedrooms ?? "—";
+  }
+  function baths(v: VillaItem) {
+    return v.meta?.bathrooms ?? "—";
+  }
+  function guests(v: VillaItem) {
+    return v.meta?.guests ?? "—";
+  }
+  function formatEuro(n: string | number | undefined) {
+    if (n === undefined || n === null || n === "" || n === "—") return "—";
+    const num =
+      typeof n === "string"
+        ? Number(String(n).replace(/[^\d.-]/g, ""))
+        : Number(n);
+    if (Number.isNaN(num)) return "—";
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 0,
+    }).format(num);
+  }
+  function priceBadge(annual?: string | number) {
+    if (annual === undefined || annual === null || annual === "" || Number(annual) === 0) {
+      return { label: "Contact us", isContact: true };
+    }
+    return { label: `from ${formatEuro(annual)} / year`, isContact: false };
+  }
 
-  const query = useMemo(() => {
-    const p = new URLSearchParams();
-    p.set("dest", DEST);               // ← Ibiza only
-    p.set("season", season);
-    p.set("ts", Date.now().toString());
-    return p.toString();
-  }, [season]);
-
+  // ---------- load villas ----------
   useEffect(() => {
-    let cancel = false;
     (async () => {
-      setLoading(true);
-      setError(null);
       try {
-        const r = await fetch(`/api/invenio/villas?${query}`);
-        const j = await r.json();
-        if (!r.ok || !j?.ok) throw new Error(j?.error || `HTTP ${r.status}`);
-        if (!cancel) setVillas(j.villas || []);
-      } catch (e: any) {
-        if (!cancel) setError(e?.message || "Failed to load");
+        const res = await fetch("/api/invenio/villas");
+        const data = await res.json();
+        setVillas(data?.villas ?? []);
+      } catch (e) {
+        console.error("Failed to load villas", e);
       } finally {
-        if (!cancel) setLoading(false);
+        setLoading(false);
       }
     })();
-    return () => { cancel = true; };
-  }, [query]);
-
-  // client-side filter
-  const filtered = useMemo(() => {
-    const priceKey: "annual" | "summer" | "winter" = season === "all" ? "annual" : season;
-    const num = (v?: string) => Number(String(v || "0").replace(/[^\d.]/g, "")) || 0;
-    return villas.filter(v => {
-      const bdOk = beds ? (v.meta?.bedrooms || 0) >= beds : true;
-      const price = num(v.meta?.prices?.[priceKey]);
-      const minOk = minRent === "" ? true : price >= (minRent as number);
-      const maxOk = maxRent === "" ? true : price <= (maxRent as number);
-      return bdOk && minOk && maxOk;
-    });
-  }, [villas, beds, minRent, maxRent, season]);
+  }, []);
 
   return (
     <>
       <Head>
-        <title>Move2Ibiza — Long-term villas in Ibiza</title>
+        <title>Move2Ibiza — Luxury Long-Term Villas</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      {/* Top bar */}
-      <nav style={sx.nav}>
-        <div style={sx.navInner}>
-          <div style={sx.brand}><div style={sx.dot} />Move2Ibiza</div>
-          <div style={sx.links}>
-            <a href="#search" style={sx.link}>Start your search</a>
-            <a href="#featured" style={sx.link}>Featured</a>
-            <a href="#faq" style={sx.link}>FAQs</a>
-          </div>
-        </div>
-      </nav>
+      {/* ====== GOLD RIBBON HEADER ====== */}
+      <header className="fixed top-0 inset-x-0 z-50 bg-[#C6A36C] shadow-[0_2px_20px_rgba(0,0,0,0.15)]">
+        <div className="mx-auto max-w-7xl h-14 sm:h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+          {/* Brand */}
+          <a href="/" className="flex items-center gap-3 no-underline">
+            <img
+              src="/move2ibiza-logo.png"
+              alt="Move2Ibiza"
+              className="h-8 w-auto"
+            />
+            <span className="sr-only">Move2Ibiza</span>
+          </a>
 
-      {/* Hero */}
-      <header style={sx.hero}>
-        <div style={sx.heroInner}>
-          <div>
-            <h1 style={sx.h1}>Long-term luxury villas<br/>in Ibiza.</h1>
-            <p style={sx.lead}>Curated stays for 6–24 months. Discreet, end-to-end service.</p>
-            <a href="#search" style={sx.cta}>Explore villas</a>
-          </div>
-
-          {/* Search card (Ibiza only) */}
-          <div id="search" style={sx.card}>
-            <h3 style={{ margin: "0 0 12px" }}>Start your search</h3>
-
-            <div style={sx.row2}>
-              <div style={{ flex: 1 }}>
-                <label style={sx.label}>Season</label>
-                <select value={season} onChange={e => setSeason(e.target.value as Season)} style={sx.select}>
-                  <option value="all">All (long rental)</option>
-                  <option value="annual">Annual</option>
-                  <option value="summer">Summer</option>
-                  <option value="winter">Winter</option>
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={sx.label}>Bedrooms</label>
-                <select value={beds} onChange={e => setBeds(Number(e.target.value))} style={sx.select}>
-                  {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div style={sx.row2}>
-              <div style={{ flex: 1 }}>
-                <label style={sx.label}>Min rent (€)</label>
-                <input inputMode="numeric" value={minRent} onChange={e => setMinRent(e.target.value === "" ? "" : Number(e.target.value))} placeholder="8000" style={sx.input} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={sx.label}>Max rent (€)</label>
-                <input inputMode="numeric" value={maxRent} onChange={e => setMaxRent(e.target.value === "" ? "" : Number(e.target.value))} placeholder="30000" style={sx.input} />
-              </div>
-            </div>
-
-            <div style={{ fontSize: 12, opacity: 0.65, marginTop: 6 }}>Location: <strong>Ibiza</strong></div>
-          </div>
+          {/* Nav */}
+          <nav className="hidden md:flex items-center gap-8 text-[15px] text-slate-900">
+            <a href="#search" className="hover:opacity-75">Start your search</a>
+            <a href="#featured" className="hover:opacity-75">Featured</a>
+            <a href="#contact" className="hover:opacity-75">Contact</a>
+            <a
+              href="/v/can-emily-aa6f68c5-51d1-4b0f-9e63-5701d9c25955"
+              className="inline-flex items-center gap-2 h-9 rounded-full px-4 text-sm font-medium
+                         bg-white/20 border border-white/40 text-slate-900 hover:bg-white/30"
+            >
+              View Villa Page <span className="translate-y-px">→</span>
+            </a>
+          </nav>
         </div>
       </header>
+      {/* spacer for fixed header */}
+      <div className="h-14 sm:h-16" />
 
-      {/* Results */}
-      <main id="featured" style={sx.main}>
-        <h2 style={{ margin: "0 0 12px" }}>Featured villas</h2>
-        {loading && <p style={sx.muted}>Loading…</p>}
-        {error && <p style={{ ...sx.muted, color: "crimson" }}>{error}</p>}
-        {!loading && !error && filtered.length === 0 && <p style={sx.muted}>No villas match your filters.</p>}
+      {/* ====== HERO ====== */}
+      <section
+        className="relative h-[90vh] flex flex-col justify-center text-center text-white bg-cover bg-center"
+        style={{ backgroundImage: "url('/es-vedra-hero.jpg')" }}
+      >
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative z-10 max-w-3xl mx-auto px-6">
+          <h1 className="text-5xl sm:text-6xl font-bold leading-tight mb-4">
+            Luxury long-term villas <br /> in Ibiza.
+          </h1>
+          <p className="text-lg sm:text-xl text-gray-200 mb-10">
+            Handpicked homes for extended stays — privacy, views, and
+            concierge-level comfort.
+          </p>
 
-        <div style={sx.grid}>
-          {filtered.map(v => (
-            <Link key={v.slug} href={`/v/${v.slug}`} style={sx.cardLink}>
-              <div style={sx.cardImgWrap}>
-                <img src={v.cover} alt={v.title} loading="lazy" style={sx.cardImg} />
-                <span style={sx.badge}>{v.city || "Ibiza"}</span>
-              </div>
-              <div style={sx.cardBody}>
-                <h3 style={sx.cardTitle}>{v.title}</h3>
-                <p style={sx.cardMeta}>
-                  {[
-                    v.meta?.bedrooms ? `${v.meta.bedrooms} bd` : null,
-                    v.meta?.bathrooms ? `${v.meta.bathrooms} ba` : null,
-                    v.meta?.guests ? `${v.meta.guests} guests` : null,
-                  ].filter(Boolean).join(" · ")}
-                </p>
-                {v.meta?.prices && (
-                  <p style={sx.cardPrice}>
-                    {season === "all"
-                      ? (v.meta.prices.annual ? `Annual: ${v.meta.prices.annual}` : "—")
-                      : (v.meta.prices[season] || "—")}
-                  </p>
-                )}
-              </div>
-            </Link>
-          ))}
+          <div className="flex justify-center gap-4 mb-12">
+            <a
+              href="#featured"
+              className="rounded-full bg-[#C6A36C] text-slate-900 px-6 py-3 text-base font-semibold hover:bg-[#b8925e]"
+            >
+              Explore Villas
+            </a>
+            <a
+              href="#search"
+              className="rounded-full bg-white/20 border border-white/40 px-6 py-3 text-base font-semibold hover:bg-white/30"
+            >
+              Start your search
+            </a>
+          </div>
+
+          {/* Search bar */}
+          <div
+            id="search"
+            className="flex flex-wrap justify-center gap-2 bg-white/10 backdrop-blur-sm rounded-2xl py-4 px-6 max-w-3xl mx-auto"
+          >
+            <input
+              type="text"
+              placeholder="Location (e.g., Santa Gertrudis)"
+              className="rounded-xl px-4 py-2 text-slate-900 bg-white/90 w-[230px] placeholder-slate-500 focus:outline-none"
+            />
+            <select className="rounded-xl px-4 py-2 text-slate-900 bg-white/90 w-[150px] focus:outline-none">
+              <option>Bedrooms</option>
+              <option>1</option>
+              <option>2</option>
+              <option>3</option>
+              <option>4+</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Monthly budget (€)"
+              className="rounded-xl px-4 py-2 text-slate-900 bg-white/90 w-[200px] placeholder-slate-500 focus:outline-none"
+            />
+            <button className="rounded-xl bg-[#C6A36C] text-slate-900 font-semibold px-6 py-2 hover:bg-[#b8925e]">
+              Search
+            </button>
+          </div>
         </div>
-      </main>
+      </section>
 
-      <footer style={sx.footer}>
-        <small style={{ opacity: 0.7 }}>Ibiza only · Data via Invenio Homes</small>
+      {/* ====== FEATURED GRID (Lush-style) ====== */}
+      <section id="featured" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
+        <div className="flex items-end justify-between mb-6">
+          <h2 className="text-2xl font-semibold text-slate-900">Featured villas</h2>
+          <a href="#search" className="text-sm text-slate-600 hover:text-slate-900">See all</a>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="rounded-3xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
+                <div className="aspect-[16/10] bg-slate-200 animate-pulse" />
+                <div className="p-5 space-y-3">
+                  <div className="h-5 bg-slate-200 rounded w-2/3 animate-pulse" />
+                  <div className="h-4 bg-slate-200 rounded w-1/2 animate-pulse" />
+                  <div className="h-4 bg-slate-200 rounded w-1/3 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7">
+            {villas.map((v, i) => {
+              const img = firstImage(v);
+              const href = `/v/${encodeURIComponent(v.slug || "")}`;
+              const p = priceBadge(v.meta?.prices?.annual);
+
+              return (
+                <a
+                  key={(v.slug || `villa-${i}`) + i}
+                  href={href}
+                  className="group block rounded-3xl bg-white overflow-hidden ring-1 ring-slate-200 hover:ring-slate-300 shadow-sm hover:shadow-2xl transition-all duration-300"
+                >
+                  {/* Image */}
+                  <div className="relative aspect-[16/10] overflow-hidden">
+                    {img ? (
+                      <img
+                        src={img}
+                        alt={v.title || "Villa"}
+                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-slate-200" />
+                    )}
+                    {/* Location chip – white, soft ring */}
+                    <span className="absolute left-3 top-3 inline-flex items-center rounded-full bg-white/90 text-slate-900 text-xs px-2 py-1 shadow-sm ring-1 ring-white/70">
+                      {loc(v)}
+                    </span>
+                  </div>
+
+                  {/* Body */}
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="font-semibold text-slate-900 leading-snug">
+                        {v.title || "Untitled"}
+                      </div>
+                      <span
+                        className={`shrink-0 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                          p.isContact
+                            ? "bg-slate-100 text-slate-700"
+                            : "bg-[#C6A36C] text-slate-900"
+                        }`}
+                        title="Annual price"
+                      >
+                        {p.label}
+                      </span>
+                    </div>
+
+                    {/* Meta with icons */}
+                    <div className="mt-3 flex items-center gap-5 text-sm text-slate-700">
+                      <span className="inline-flex items-center gap-1.5">
+                        <IconBed /> {beds(v)} bd
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <IconBath /> {baths(v)} ba
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <IconUsers /> {guests(v)} guests
+                      </span>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-end">
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[#C6A36C] text-slate-900 text-xs font-semibold px-3 py-1
+                                   group-hover:translate-x-0.5 transition-transform"
+                      >
+                        View details <span className="translate-y-px">→</span>
+                      </span>
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ====== FOOTER ====== */}
+      <footer id="contact" className="bg-[#0f2430] text-white mt-10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 grid gap-6 md:grid-cols-3">
+          <div className="flex items-center gap-3">
+            <img src="/move2ibiza-logo.png" alt="Move2Ibiza" className="h-12 w-auto" />
+          </div>
+          <div className="text-white/80">
+            Handpicked homes for extended stays — privacy, views, and concierge-level comfort.
+          </div>
+          <div className="flex md:justify-end gap-4 text-white/80">
+            <a href="#" className="hover:text-white">Instagram</a>
+            <a href="#" className="hover:text-white">WhatsApp</a>
+            <a href="#" className="hover:text-white">Contact</a>
+          </div>
+        </div>
+        <div className="text-center text-white/60 text-sm pb-8">
+          © {new Date().getFullYear()} Move2Ibiza — Powered by Invenio Homes
+        </div>
       </footer>
     </>
   );
 }
-
-const sx: Record<string, React.CSSProperties> = {
-  nav: { borderBottom: "1px solid #eef0f2", background: "#fff" },
-  navInner: { maxWidth: 1200, margin: "0 auto", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" },
-  brand: { display: "flex", gap: 10, alignItems: "center", fontWeight: 700 },
-  dot: { width: 16, height: 16, borderRadius: 4, background: "#111827" },
-  links: { display: "flex", gap: 18, fontSize: 14 },
-  link: { color: "#111827", textDecoration: "none", opacity: 0.85 },
-
-  hero: { background: "linear-gradient(135deg,#f6f9fc 0%,#fff 60%)" },
-  heroInner: { maxWidth: 1200, margin: "0 auto", padding: "48px 20px", display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 28 },
-  h1: { fontSize: 56, lineHeight: 1.1, margin: "20px 0 12px", letterSpacing: -0.5 },
-  lead: { fontSize: 18, opacity: 0.75, maxWidth: 560, marginBottom: 18 },
-  cta: { display: "inline-block", background: "#111827", color: "#fff", padding: "10px 16px", borderRadius: 10, textDecoration: "none", fontWeight: 600 },
-
-  card: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, boxShadow: "0 10px 25px rgba(0,0,0,0.05)" },
-  row2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 },
-  label: { fontSize: 12, opacity: 0.7 },
-  input: { height: 40, padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", outline: "none" },
-  select: { height: 40, padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", outline: "none" },
-
-  main: { maxWidth: 1200, margin: "0 auto", padding: "28px 20px 60px" },
-  muted: { opacity: 0.6 },
-
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 18 },
-  cardLink: { display: "block", border: "1px solid #eef0f2", borderRadius: 16, overflow: "hidden", textDecoration: "none", color: "inherit", background: "#fff", boxShadow: "0 3px 12px rgba(0,0,0,0.04)" },
-  cardImgWrap: { position: "relative", height: 200, overflow: "hidden" },
-  cardImg: { width: "100%", height: "100%", objectFit: "cover" },
-  badge: { position: "absolute", left: 10, bottom: 10, background: "rgba(17,24,39,.8)", color: "#fff", padding: "3px 8px", borderRadius: 8, fontSize: 12 },
-  cardBody: { padding: 12 },
-  cardTitle: { margin: "0 0 8px", fontSize: 16 },
-  cardMeta: { margin: 0, opacity: 0.7, fontSize: 13 },
-  cardPrice: { margin: "8px 0 0", fontWeight: 600 },
-
-  footer: { borderTop: "1px solid #eef0f2", textAlign: "center", padding: "16px 20px", background: "#fff" },
-};
