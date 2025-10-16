@@ -1,0 +1,15 @@
+# Build & deps
+node_modules/
+.next/
+out/
+
+# Logs
+*.log
+
+# Env
+.env*
+!.env.example
+
+# OS/Editor
+.DS_Store
+.vscode/
