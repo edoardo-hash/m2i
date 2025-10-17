@@ -5,9 +5,6 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import SiteHeader from "../../components/SiteHeader";
-import dynamic from "next/dynamic";
-import Lightbox from "../../components/Lightbox";
-const OSMMap = dynamic(() => import("../../components/OSMMap"), { ssr: false });
 
 /* ---------- Types (loose to fit your API) ---------- */
 type Photo = string | { url?: string; src?: string };
@@ -86,8 +83,6 @@ export default function VillaPage() {
   const [idx, setIdx] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [tab, setTab] = useState<"desc" | "feat" | "loc" | "gal">("desc");
-  const [lbOpen, setLbOpen] = useState(false);
-  const [lbStart, setLbStart] = useState(0);
 
   // Load data
   useEffect(() => {
@@ -141,8 +136,6 @@ export default function VillaPage() {
   const guests = villa?.meta?.guests ?? "—";
   const prices = priceLine(villa);
   const mapQuery = villa?.mapQuery || where;
-  const lat = (villa as any)?.coords?.lat ?? (villa as any)?.lat ?? 38.984;
-  const lng = (villa as any)?.coords?.lng ?? (villa as any)?.lng ?? 1.435;
 
   return (
     <>
@@ -347,7 +340,13 @@ export default function VillaPage() {
             {tab === "loc" && (
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Location</h2>
-                <OSMMap lat={lat} lng={lng} zoom={12} />
+                <iframe
+                  className="w-full h-80 rounded-xl border border-slate-200 shadow-sm"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={`https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed`}
+                  title="Map"
+                />
               </section>
             )}
 
@@ -357,9 +356,9 @@ export default function VillaPage() {
                 {images.length ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {images.map((g, i) => (
-                      <button key={i} onClick={() => { setLbStart(i); setLbOpen(true); }} className="relative aspect-[4/3] overflow-hidden ring-1 ring-slate-200 rounded-xl focus:outline-none">
+                      <div key={i} className="relative aspect-[4/3] overflow-hidden ring-1 ring-slate-200 rounded-xl">
                         <img src={g} className="absolute inset-0 w-full h-full object-cover" />
-                      </button>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -428,9 +427,6 @@ export default function VillaPage() {
           © {new Date().getFullYear()} Move2Ibiza — Powered by Invenio Homes
         </div>
       </footer>
-
-      {/* Lightbox */}
-      <Lightbox images={images} isOpen={lbOpen} startIndex={lbStart} onClose={() => setLbOpen(false)} />
     </>
   );
 }
