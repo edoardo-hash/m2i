@@ -1,14 +1,29 @@
+# Patch: Lightbox + OpenStreetMap
 
-# Move2Ibiza — Full Project
-Create `.env.local`:
+## Install dependencies (for the map)
+npm i react-leaflet leaflet
+
+## Use the Lightbox in your gallery
+```tsx
+import { useState } from 'react';
+import Lightbox from '@/components/Lightbox';
+
+const [isOpen, setOpen] = useState(false);
+const [start, setStart] = useState(0);
+
+{/* In your grid loop: */}
+<button onClick={() => { setStart(i); setOpen(true); }} className="block focus:outline-none">
+  <img src={img} className="w-full h-full object-cover rounded-xl" />
+</button>
+
+<Lightbox images={imagesArray} isOpen={isOpen} startIndex={start} onClose={() => setOpen(false)} />
 ```
-INVENIO_API_BASE=https://api.inveniohomes.com
-INVENIO_API_KEY=TheIb$23!
-INVENIO_BP_UUID=954305e2-7f02-44df-8d8d-fa5013d98366
+
+## Use OpenStreetMap
+```tsx
+import dynamic from 'next/dynamic';
+const OSMMap = dynamic(() => import('@/components/OSMMap'), { ssr: false });
+
+<OSMMap lat={38.984} lng={1.435} zoom={11} />
 ```
-Run:
-```
-npm install
-npm run dev
-```
-Open http://localhost:3000
+# m2i-V2
