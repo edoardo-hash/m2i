@@ -119,7 +119,7 @@ export default function Home() {
       <header className={`fixed top-0 inset-x-0 z-50 transition-colors duration-300 ${scrolled ? "backdrop-blur-sm bg-white/30" : "bg-transparent"}`}>
         <div className="mx-auto max-w-7xl h-14 sm:h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2" aria-label="Move2Ibiza home">
-            <img src="/m2i-logo.png" alt="Move2Ibiza logo" className="h-9 w-auto" />
+            <img src="/m2i-logo.png" alt="Move2Ibiza logo" className="h-[2.6rem] w-auto" />
             <span className={`${scrolled ? "text-slate-900" : "text-white"} font-semibold tracking-wide text-sm sm:text-base`}>Move2Ibiza</span>
           </a>
           <nav className={`hidden sm:flex items-center gap-6 text-sm ${scrolled ? "text-slate-800" : "text-white"}`}>
@@ -219,7 +219,7 @@ export default function Home() {
                       <div className="h-24 bg-slate-100 animate-pulse" />
                     </div>
                   ))
-                : villas.slice(0, 12).map((v, idx) => {
+                : villas.map((v, idx) => {
                     const img = firstImage(v) || "/placeholder.jpg";
                     const priceLine = formatPriceLine(v);
                     const bedrooms = v.meta?.bedrooms ?? "—";

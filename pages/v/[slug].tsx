@@ -4,12 +4,12 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import SiteHeader from "../../components/SiteHeader";
 import dynamic from "next/dynamic";
 import Lightbox from "../../components/Lightbox";
+import { useHeaderFade } from "../../lib/useHeaderFade";
 const OSMMap = dynamic(() => import("../../components/OSMMap"), { ssr: false });
 
-/* ---------- Types (loose to fit your API) ---------- */
+// --- helper types ---
 type Photo = string | { url?: string; src?: string };
 type Prices = { annual?: number | string; monthly?: number | string; summer?: number | string; winter?: number | string };
 
@@ -38,14 +38,11 @@ type Villa = {
   yearly?: number | string;
 };
 
-/* ---------- Helpers ---------- */
+// --- helpers ---
 const toNum = (x: unknown) =>
   typeof x === "string" ? Number(x.replace(/[^\d.]/g, "")) : typeof x === "number" ? x : NaN;
-
 const eur = (n: number) =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-
-// “€56,000 / winter - €30,000 / summer - €60,000 / year” (only show non-zero)
 function priceLine(v: Villa | null): string | undefined {
   if (!v) return;
   const pick = (...vals: unknown[]) => {
@@ -55,7 +52,6 @@ function priceLine(v: Villa | null): string | undefined {
   const winter = pick(v.meta?.prices?.winter, v.price?.winter, v.pricing?.winter, v.rent?.winter);
   const summer = pick(v.meta?.prices?.summer, v.price?.summer, v.pricing?.summer, v.rent?.summer);
   const annual = pick(v.meta?.prices?.annual, v.priceAnnual, v.yearly, v.price?.annual, v.pricing?.annual, v.rent?.annual);
-
   const parts: string[] = [];
   if (winter) parts.push(`${eur(winter)} / winter`);
   if (summer) parts.push(`${eur(summer)} / summer`);
@@ -64,7 +60,6 @@ function priceLine(v: Villa | null): string | undefined {
 }
 
 const photoSrc = (p?: Photo) => (typeof p === "string" ? p : p?.url || p?.src);
-
 function collectImages(v: Villa | null): string[] {
   if (!v) return [];
   const list = [
@@ -76,7 +71,7 @@ function collectImages(v: Villa | null): string[] {
   return Array.from(new Set(list));
 }
 
-/* ---------- Page ---------- */
+// --- main page ---
 export default function VillaPage() {
   const router = useRouter();
   const { slug } = router.query as { slug?: string };
@@ -84,26 +79,22 @@ export default function VillaPage() {
   const [villa, setVilla] = useState<Villa | null>(null);
   const [loading, setLoading] = useState(true);
   const [idx, setIdx] = useState(0);
-  const [scrolled, setScrolled] = useState(false);
   const [tab, setTab] = useState<"desc" | "feat" | "loc" | "gal">("desc");
   const [lbOpen, setLbOpen] = useState(false);
   const [lbStart, setLbStart] = useState(0);
 
-  // Load data
+  const { style: headerStyle, light } = useHeaderFade(160);
+
   useEffect(() => {
     if (!slug) return;
     (async () => {
       try {
-        // detail endpoint first
         let v: Villa | null = null;
-        try {
-          const r1 = await fetch(`/api/invenio/villa?slug=${encodeURIComponent(slug)}`);
-          if (r1.ok) {
-            const d1 = await r1.json();
-            v = (d1?.villa as Villa) || (d1 as Villa);
-          }
-        } catch {}
-        // fallback to list
+        const r1 = await fetch(`/api/invenio/villa?slug=${encodeURIComponent(slug)}`).catch(() => null);
+        if (r1?.ok) {
+          const d1 = await r1.json();
+          v = (d1?.villa as Villa) || (d1 as Villa);
+        }
         if (!v) {
           const r2 = await fetch("/api/invenio/villas");
           const d2 = await r2.json();
@@ -116,20 +107,11 @@ export default function VillaPage() {
         setVilla(v ?? null);
       } catch (e) {
         console.error(e);
-        setVilla(null);
       } finally {
         setLoading(false);
       }
     })();
   }, [slug]);
-
-  // Header scroll feel
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   const images = useMemo(() => collectImages(villa), [villa]);
   useEffect(() => setIdx(0), [slug]);
@@ -140,7 +122,6 @@ export default function VillaPage() {
   const bathrooms = villa?.meta?.bathrooms ?? "—";
   const guests = villa?.meta?.guests ?? "—";
   const prices = priceLine(villa);
-  const mapQuery = villa?.mapQuery || where;
   const lat = (villa as any)?.coords?.lat ?? (villa as any)?.lat ?? 38.984;
   const lng = (villa as any)?.coords?.lng ?? (villa as any)?.lng ?? 1.435;
 
@@ -151,28 +132,27 @@ export default function VillaPage() {
         {images[0] && <meta property="og:image" content={images[0]} />}
       </Head>
 
-      {/* Header (transparent over hero, gold hovers like Home) */}
-            {/* Header (transparent over hero, gold hovers like Home) */}
-            {/* Header (overlay: transparent on top; solid on scroll) */}
-            {/* Header (transparent overlay with logo + text) */}
-            {/* Header: fully transparent at top; subtle on scroll */}
-      <header className={`fixed top-0 inset-x-0 z-50 transition-colors duration-300 ${scrolled ? "backdrop-blur-sm bg-white/30" : "bg-transparent"}`}>
+      {/* Header with fade */}
+      <header
+        className="fixed top-0 inset-x-0 z-50 transition-[background-color] duration-150"
+        style={headerStyle}
+      >
         <div className="mx-auto max-w-7xl h-14 sm:h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2" aria-label="Move2Ibiza home">
             <img src="/m2i-logo.png" alt="Move2Ibiza logo" className="h-9 w-auto" />
-            <span className={`${scrolled ? "text-slate-900" : "text-white"} font-semibold tracking-wide text-sm sm:text-base`}>Move2Ibiza</span>
+            <span className={`${light ? "text-white" : "text-slate-900"} font-semibold tracking-wide text-sm sm:text-base`}>
+              Move2Ibiza
+            </span>
           </a>
-          <nav className={`hidden sm:flex items-center gap-6 text-sm ${scrolled ? "text-slate-800" : "text-white"}`}>
+          <nav className={`hidden sm:flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
             <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Start your search</a>
             <a href="/#featured" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Featured</a>
             <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
           </nav>
         </div>
       </header>
-    
-      
-    
-    {/* HERO (title serif like Home card names, light chip) */}
+
+      {/* HERO */}
       <section className="relative">
         <div className="relative h-[60vh] sm:h-[70vh] md:h-[76vh]">
           {images.length ? (
@@ -189,7 +169,6 @@ export default function VillaPage() {
                 {title}
               </h1>
 
-              {/* light chip to match homepage chips */}
               <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-1 text-slate-900 text-sm md:text-base ring-1 ring-black/5 shadow-sm">
                 <span>{where}</span>
                 <span className="h-1 w-1 rounded-full bg-slate-300" />
@@ -227,7 +206,7 @@ export default function VillaPage() {
           </div>
         )}
 
-        {/* Floating thumbnails — slate by default, gold when active (like home pills/rings) */}
+        {/* thumbnails */}
         {images.length > 1 && (
           <div className="relative -mt-8 sm:-mt-10">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -237,11 +216,10 @@ export default function VillaPage() {
                     key={i}
                     onClick={() => setIdx(i)}
                     aria-label={`View image ${i + 1}`}
-                    className={`relative h-16 w-24 overflow-hidden rounded-md transition-all ${
-                      i === idx
+                    className={`relative h-16 w-24 overflow-hidden rounded-md transition-all ${i === idx
                         ? "ring-4 ring-[#C6A36C] shadow-[0_0_0_4px_rgba(198,163,108,0.35)]"
                         : "ring-1 ring-slate-200 hover:ring-slate-300"
-                    }`}
+                      }`}
                   >
                     <img src={src} className="absolute inset-0 w-full h-full object-cover" />
                   </button>
@@ -252,7 +230,7 @@ export default function VillaPage() {
         )}
       </section>
 
-      {/* Prices pill (same language/feel as home) */}
+      {/* Prices pill */}
       {prices && (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6">
           <div className="inline-flex items-center gap-3 rounded-full bg-white ring-1 ring-slate-200 px-4 py-2 shadow-sm">
@@ -262,7 +240,7 @@ export default function VillaPage() {
         </div>
       )}
 
-      {/* Spec bar (slate) + gold divider like home accents */}
+      {/* Spec bar */}
       <section className="bg-slate-900 text-white mt-8 sm:mt-10">
         <div className="mx-auto max-w-7xl px-6 py-6 grid grid-cols-3 gap-6 text-center">
           <div>
@@ -281,38 +259,30 @@ export default function VillaPage() {
         <div className="h-[3px] w-full bg-[#C6A36C]" />
       </section>
 
-      {/* Tabs (gold active underline) */}
+      {/* Tabs */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-10">
         <div className="flex gap-6 border-b border-slate-200">
           <button
             onClick={() => setTab("desc")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${
-              tab === "desc" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"
-            }`}
+            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "desc" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
           >
             Description
           </button>
           <button
             onClick={() => setTab("feat")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${
-              tab === "feat" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"
-            }`}
+            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "feat" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
           >
             Features
           </button>
           <button
             onClick={() => setTab("loc")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${
-              tab === "loc" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"
-            }`}
+            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "loc" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
           >
             Location
           </button>
           <button
             onClick={() => setTab("gal")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${
-              tab === "gal" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"
-            }`}
+            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "gal" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
           >
             Gallery
           </button>
@@ -347,7 +317,7 @@ export default function VillaPage() {
             {tab === "loc" && (
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Location</h2>
-                <OSMMap lat={lat} lng={lng} zoom={12} />
+                <OSMMap lat={lat} lng={lng} zoom={10.5} />
               </section>
             )}
 
@@ -369,7 +339,7 @@ export default function VillaPage() {
             )}
           </div>
 
-          {/* Sidebar (CTA like home’s gold button) */}
+          {/* Sidebar (CTA) */}
           <aside className="md:sticky md:top-[120px]">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
               <div className="text-sm text-slate-600">From</div>
@@ -422,7 +392,7 @@ export default function VillaPage() {
         </div>
       </section>
 
-      {/* Footer (slate like home neutrals) */}
+      {/* Footer */}
       <footer className="bg-slate-900 text-white mt-10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 text-center text-white/80 text-sm">
           © {new Date().getFullYear()} Move2Ibiza — Powered by Invenio Homes

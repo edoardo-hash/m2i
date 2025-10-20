@@ -1,5 +1,6 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { useHeaderFade } from "../lib/useHeaderFade";
 
 /**
  * Assets expected in /public:
@@ -39,14 +40,9 @@ type VillaItem = {
 export default function Home() {
   const [villas, setVillas] = useState<VillaItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scrolled, setScrolled] = useState(false);
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  // smooth fading header (replaces old "scrolled" boolean)
+  const { style: headerStyle, light } = useHeaderFade(160);
 
   // -------- helpers --------
   const firstImage = (v: VillaItem): string | undefined => {
@@ -112,27 +108,26 @@ export default function Home() {
       <Head>
         <title>Move2Ibiza — Luxury Long-Term Villas</title>
       </Head>
+
       {/* Header (transparent over hero, gold hovers like Home) */}
-            {/* Header (overlay: transparent on top; solid on scroll) */}
-            {/* Header (transparent overlay with logo + text) */}
-            {/* Header: fully transparent at top; subtle on scroll */}
-      <header className={`fixed top-0 inset-x-0 z-50 transition-colors duration-300 ${scrolled ? "backdrop-blur-sm bg-white/30" : "bg-transparent"}`}>
+      <header
+        className="fixed top-0 inset-x-0 z-50 transition-[background-color] duration-150"
+        style={headerStyle}
+      >
         <div className="mx-auto max-w-7xl h-14 sm:h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2" aria-label="Move2Ibiza home">
             <img src="/m2i-logo.png" alt="Move2Ibiza logo" className="h-[2.6rem] w-auto" />
-            <span className={`${scrolled ? "text-slate-900" : "text-white"} font-semibold tracking-wide text-sm sm:text-base`}>Move2Ibiza</span>
+            <span className={`${light ? "text-white" : "text-slate-900"} font-semibold tracking-wide text-sm sm:text-base`}>
+              Move2Ibiza
+            </span>
           </a>
-          <nav className={`hidden sm:flex items-center gap-6 text-sm ${scrolled ? "text-slate-800" : "text-white"}`}>
+          <nav className={`hidden sm:flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
             <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Start your search</a>
             <a href="/#featured" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Featured</a>
             <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
           </nav>
         </div>
       </header>
-    
-      
-    
-    
 
       {/* ===== HERO (unchanged) ===== */}
       <section
@@ -192,21 +187,22 @@ export default function Home() {
       </section>
 
       {/* ===== FEATURED (full-bleed, squared, 3-up, serif headings) ===== */}
-<section
-  id="featured"
-  className="pt-8 pb-16 transition-all duration-500 ease-out scroll-mt-16"
->        {/* Header */}
-      <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10 mb-10 flex items-center justify-between border-b border-slate-200 pb-3">
-  <h2 className="font-serif text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">
-    Featured villas
-  </h2>
-  <a
-    href="#search"
-    className="text-sm sm:text-base font-medium text-[#C6A36C] hover:text-[#b8925e] transition-colors"
-  >
-    See all →
-  </a>
-</div>
+      <section
+        id="featured"
+        className="pt-8 pb-16 transition-all duration-500 ease-out scroll-mt-16"
+      >
+        {/* Header */}
+        <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10 mb-10 flex items-center justify-between border-b border-slate-200 pb-3">
+          <h2 className="font-serif text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">
+            Featured villas
+          </h2>
+          <a
+            href="#search"
+            className="text-sm sm:text-base font-medium text-[#C6A36C] hover:text-[#b8925e] transition-colors"
+          >
+            See all →
+          </a>
+        </div>
 
         {/* FULL-BLEED GRID */}
         <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen">
@@ -219,7 +215,7 @@ export default function Home() {
                       <div className="h-24 bg-slate-100 animate-pulse" />
                     </div>
                   ))
-                : villas.slice(0, 12).map((v, idx) => {
+                : villas.map((v, idx) => {
                     const img = firstImage(v) || "/placeholder.jpg";
                     const priceLine = formatPriceLine(v);
                     const bedrooms = v.meta?.bedrooms ?? "—";
