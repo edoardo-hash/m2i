@@ -43,7 +43,6 @@ export default function Home() {
 
   // smooth fading header (replaces old "scrolled" boolean)
   const { style: headerStyle, light } = useHeaderFade(160);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   // -------- helpers --------
   const firstImage = (v: VillaItem): string | undefined => {
@@ -130,46 +129,9 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Mobile menu button (sm and below) */}
-      <div className="sm:hidden fixed top-2 right-3 z-[60]">
-        <button
-          aria-label="Open menu"
-          onClick={() => setMobileOpen(true)}
-          className={`rounded-full p-2 ring-1 ring-white/40 backdrop-blur-md ${light ? "bg-white/10 text-white" : "bg-white text-slate-700 ring-slate-300"}`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
-      </div>
-
-      {/* Mobile nav overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/50" onClick={() => setMobileOpen(false)}>
-          <div
-            className="absolute right-0 top-0 h-full w-4/5 max-w-xs bg-white shadow-xl p-6 flex flex-col gap-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <img src="/m2i-logo.png" alt="Move2Ibiza" className="h-8 w-auto" />
-                <span className="font-semibold text-slate-900">Move2Ibiza</span>
-              </div>
-              <button aria-label="Close menu" onClick={() => setMobileOpen(false)} className="p-1 rounded-full hover:bg-slate-100">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M6.225 4.811 4.81 6.225 10.586 12 4.81 17.775l1.414 1.414L12 13.414l5.775 5.775 1.414-1.414L13.414 12l5.775-5.775-1.414-1.414L12 10.586z"/></svg>
-              </button>
-            </div>
-            <nav className="flex flex-col text-slate-700 text-base">
-              <a href="/#featured" className="py-2 border-b border-slate-100">Featured</a>
-              <a href="/#search" className="py-2 border-b border-slate-100">Start your search</a>
-              <a href="/#contact" className="py-2">Contact</a>
-            </nav>
-          </div>
-        </div>
-      )}
-
-
       {/* ===== HERO (unchanged) ===== */}
       <section
-        className="relative h-[90vh] flex flex-col justify-center text-center text-white bg-cover bg-center overflow-hidden"
+        className="relative h-[90vh] flex flex-col justify-center text-center text-white bg-cover bg-center"
         style={{ backgroundImage: "url('/es-vedra-hero.jpg')" }}
       >
         <div className="absolute inset-0 bg-black/40" />
@@ -222,16 +184,12 @@ export default function Home() {
             </button>
           </div>
         </div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white to-transparent" />
-        <svg className="absolute -bottom-1 left-0 right-0 w-full text-white" viewBox="0 0 1440 48" preserveAspectRatio="none" aria-hidden="true">
-          <path fill="currentColor" d="M0 48h1440V0c-120 24-240 36-360 36S840 24 720 24 480 36 360 36 120 24 0 0v48z"/>
-        </svg>
       </section>
 
       {/* ===== FEATURED (full-bleed, squared, 3-up, serif headings) ===== */}
       <section
         id="featured"
-        className="-mt-10 pt-14 pb-20 transition-all duration-500 ease-out scroll-mt-16"
+        className="pt-8 pb-16 transition-all duration-500 ease-out scroll-mt-16"
       >
         {/* Header */}
         <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10 mb-10 flex items-center justify-between border-b border-slate-200 pb-3">
@@ -249,7 +207,7 @@ export default function Home() {
         {/* FULL-BLEED GRID */}
         <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen">
           <div className="px-4 sm:px-6 lg:px-10 xl:px-16">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 md:gap-6">
               {loading
                 ? [...Array(6)].map((_, i) => (
                     <div key={i} className="bg-white ring-1 ring-slate-200 shadow-sm">
@@ -267,14 +225,14 @@ export default function Home() {
                       <a
                         key={v.slug || idx}
                         href={`/v/${v.slug}`}
-                        className="group block bg-white ring-1 ring-slate-200/70 rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition transform"
+                        className="group block bg-white ring-1 ring-slate-200 shadow-sm hover:shadow-md transition"
                       >
                         {/* IMAGE (square corners) */}
-                        <div className="relative aspect-[4/3] overflow-hidden">
+                        <div className="relative aspect-[4/3]">
                           <img
                             src={img}
                             alt={v.title || "Ibiza villa"}
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
                             loading="lazy"
                             sizes="(min-width:1280px) 33vw, (min-width:640px) 50vw, 100vw"
                           />
@@ -323,55 +281,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-      {/* ===== CONTACT ===== */}
-      <section id="contact" className="py-20 bg-white scroll-mt-16">
-        <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
-          <div className="max-w-2xl mb-10">
-            <h2 className="font-serif text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">Get in touch</h2>
-            <p className="mt-2 text-slate-600">Tell us about your ideal stay and we’ll curate villa options tailored to your dates, budget, and vibe.</p>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <form className="bg-white ring-1 ring-slate-200/70 rounded-2xl p-6 sm:p-8 shadow-sm">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Name</label>
-                  <input name="name" required className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Email</label>
-                  <input name="email" type="email" required className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Phone / WhatsApp</label>
-                  <input name="phone" className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Dates</label>
-                  <input name="dates" placeholder="e.g. Jan 5 – Feb 2, 2026" className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-slate-700">Message</label>
-                <textarea name="message" rows={5} className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" placeholder="Tell us location preferences, bedrooms, budget, etc." />
-              </div>
-              <button className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#1B3A4B] px-5 py-3 text-white font-medium hover:opacity-95 focus-visible:outline-[#C6A36C]">
-                Send inquiry
-              </button>
-            </form>
-            <div className="bg-gradient-to-b from-slate-50 to-white ring-1 ring-slate-200/70 rounded-2xl p-6 sm:p-8">
-              <div className="space-y-4 text-slate-700">
-                <p><strong>Email:</strong> <a className="underline underline-offset-4 decoration-[#C6A36C]" href="mailto:stay@move2ibiza.com">stay@move2ibiza.com</a></p>
-                <p><strong>Phone:</strong> <a className="underline underline-offset-4 decoration-[#C6A36C]" href="tel:+34999999999">+34 999 99 99 99</a></p>
-                <p><strong>WhatsApp:</strong> <a className="underline underline-offset-4 decoration-[#C6A36C]" href="https://wa.me/34999999999">Chat with us</a></p>
-              </div>
-              <div className="mt-8 p-4 rounded-xl bg-white ring-1 ring-slate-200/70">
-                <p className="text-sm text-slate-600">Prefer email? We typically reply within a few hours (Europe/Madrid time).</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    
     </>
   );
 }
