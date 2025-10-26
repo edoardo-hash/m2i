@@ -1,15 +1,15 @@
-# Build & deps
-node_modules/
-.next/
-out/
+# Next / React build output
+.next
+out
+dist
 
-# Logs
-*.log
+# Dependencies
+node_modules
 
-# Env
+# Env (keep secrets local)
 .env*
 !.env.example
 
-# OS/Editor
+# Logs / OS junk
+*.log
 .DS_Store
-.vscode/
