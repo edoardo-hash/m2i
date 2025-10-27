@@ -2,6 +2,7 @@
 "use client";
 
 import Head from "next/head";
+import Image from "next/image";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
@@ -28,7 +29,7 @@ type Villa = {
   meta?: {
     bedrooms?: number | string;
     bathrooms?: number | string;
-    guests?: number | string;
+    guests?: number | string; // kept for API compatibility (we don't render it)
     prices?: Prices;
   };
   price?: Prices;
@@ -41,8 +42,10 @@ type Villa = {
 // --- helpers ---
 const toNum = (x: unknown) =>
   typeof x === "string" ? Number(x.replace(/[^\d.]/g, "")) : typeof x === "number" ? x : NaN;
+
 const eur = (n: number) =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+
 function priceLine(v: Villa | null): string | undefined {
   if (!v) return;
   const pick = (...vals: unknown[]) => {
@@ -71,6 +74,10 @@ function collectImages(v: Villa | null): string[] {
   return Array.from(new Set(list));
 }
 
+// tiny neutral blur placeholder
+const BLUR =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAQAICRAEAOw==";
+
 // --- main page ---
 export default function VillaPage() {
   const router = useRouter();
@@ -85,6 +92,7 @@ export default function VillaPage() {
 
   const { style: headerStyle, light } = useHeaderFade(160);
 
+  // Fetch villa
   useEffect(() => {
     if (!slug) return;
     (async () => {
@@ -120,10 +128,43 @@ export default function VillaPage() {
   const where = villa?.location || villa?.city || villa?.destination || "Ibiza";
   const bedrooms = villa?.meta?.bedrooms ?? "—";
   const bathrooms = villa?.meta?.bathrooms ?? "—";
-  const guests = villa?.meta?.guests ?? "—";
   const prices = priceLine(villa);
   const lat = (villa as any)?.coords?.lat ?? (villa as any)?.lat ?? 38.984;
   const lng = (villa as any)?.coords?.lng ?? (villa as any)?.lng ?? 1.435;
+
+  // --- Deep link tabs (hash) ---
+  // Map URL hash -> tab id
+  const hashToTab = (h: string): typeof tab => {
+    const key = h.replace("#", "").toLowerCase();
+    if (key.startsWith("desc") || key === "") return "desc";
+    if (key.startsWith("feat") || key.startsWith("features")) return "feat";
+    if (key.startsWith("loc") || key.startsWith("location")) return "loc";
+    if (key.startsWith("gal") || key.startsWith("gallery")) return "gal";
+    return "desc";
+  };
+
+  // On mount & on hash change, sync tab
+  useEffect(() => {
+    const applyHash = () => setTab(hashToTab(window.location.hash));
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  // When tab changes, update hash (without scrolling to top)
+  useEffect(() => {
+    const current = window.location.hash.replace("#", "");
+    const desired =
+      tab === "desc" ? "description" :
+      tab === "feat" ? "features" :
+      tab === "loc" ? "location" :
+      "gallery";
+    if (current !== desired) {
+      const url = new URL(window.location.href);
+      url.hash = desired;
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [tab]);
 
   return (
     <>
@@ -152,11 +193,24 @@ export default function VillaPage() {
         </div>
       </header>
 
-      {/* HERO */}
+      {/* HERO (with soft Ken Burns) */}
       <section className="relative">
-        <div className="relative h-[60vh] sm:h-[70vh] md:h-[76vh]">
+        <div className="relative h-[60vh] sm:h-[70vh] md:h-[76vh] overflow-hidden">
           {images.length ? (
-            <img src={images[idx]} alt={title} className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 kenburns">
+              <Image
+                key={images[idx]} // ensures blur per swap
+                src={images[idx]}
+                alt={title}
+                fill
+                priority
+                unoptimized
+                placeholder="blur"
+                blurDataURL={BLUR}
+                sizes="100vw"
+                className="object-cover will-change-transform"
+              />
+            </div>
           ) : (
             <div className="absolute inset-0 bg-slate-200" />
           )}
@@ -175,12 +229,6 @@ export default function VillaPage() {
                 <span>{bedrooms} bedrooms</span>
                 <span className="h-1 w-1 rounded-full bg-slate-300" />
                 <span>{bathrooms} bathrooms</span>
-                {guests !== "—" && (
-                  <>
-                    <span className="h-1 w-1 rounded-full bg-slate-300" />
-                    <span>{guests} guests</span>
-                  </>
-                )}
               </p>
             </div>
           </div>
@@ -216,12 +264,22 @@ export default function VillaPage() {
                     key={i}
                     onClick={() => setIdx(i)}
                     aria-label={`View image ${i + 1}`}
-                    className={`relative h-16 w-24 overflow-hidden rounded-md transition-all ${i === idx
+                    className={`relative h-16 w-24 overflow-hidden rounded-md transition-all ${
+                      i === idx
                         ? "ring-4 ring-[#C6A36C] shadow-[0_0_0_4px_rgba(198,163,108,0.35)]"
                         : "ring-1 ring-slate-200 hover:ring-slate-300"
-                      }`}
+                    }`}
                   >
-                    <img src={src} className="absolute inset-0 w-full h-full object-cover" />
+                    <Image
+                      src={src}
+                      alt=""
+                      fill
+                      unoptimized
+                      placeholder="blur"
+                      blurDataURL={BLUR}
+                      sizes="192px"
+                      className="object-cover"
+                    />
                   </button>
                 ))}
               </div>
@@ -240,52 +298,43 @@ export default function VillaPage() {
         </div>
       )}
 
-      {/* Spec bar */}
+      {/* Spec bar (guests removed) */}
       <section className="bg-slate-900 text-white mt-8 sm:mt-10">
-        <div className="mx-auto max-w-7xl px-6 py-6 grid grid-cols-3 gap-6 text-center">
+        <div className="mx-auto max-w-7xl px-6 py-6 grid grid-cols-2 gap-6 text-center">
           <div>
-            <div className="text-2xl font-semibold"> {bedrooms} </div>
+            <div className="text-2xl font-semibold">{bedrooms}</div>
             <div className="text-white/85">Bedrooms</div>
           </div>
           <div>
-            <div className="text-2xl font-semibold"> {bathrooms} </div>
+            <div className="text-2xl font-semibold">{bathrooms}</div>
             <div className="text-white/85">Bathrooms</div>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold"> {guests} </div>
-            <div className="text-white/85">Guests</div>
           </div>
         </div>
         <div className="h-[3px] w-full bg-[#C6A36C]" />
       </section>
 
-      {/* Tabs */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-10">
-        <div className="flex gap-6 border-b border-slate-200">
-          <button
-            onClick={() => setTab("desc")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "desc" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
-          >
-            Description
-          </button>
-          <button
-            onClick={() => setTab("feat")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "feat" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
-          >
-            Features
-          </button>
-          <button
-            onClick={() => setTab("loc")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "loc" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
-          >
-            Location
-          </button>
-          <button
-            onClick={() => setTab("gal")}
-            className={`pb-3 -mb-px text-sm font-medium border-b-4 ${tab === "gal" ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"}`}
-          >
-            Gallery
-          </button>
+      {/* Tabs (sticky + hash) */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-8">
+        <div className="sticky top-16 z-30 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-slate-200">
+          <div className="flex gap-6">
+            {[
+              { id: "desc", label: "Description" },
+              { id: "feat", label: "Features" },
+              { id: "loc", label: "Location" },
+              { id: "gal", label: "Gallery" },
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id as any)}
+                aria-current={tab === id ? "page" : undefined}
+                className={`pb-3 -mb-px text-sm font-medium border-b-4 ${
+                  tab === id ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Panels */}
@@ -293,7 +342,7 @@ export default function VillaPage() {
           {/* Main */}
           <div className="lg:col-span-2 space-y-8">
             {tab === "desc" && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section id="description" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Description</h2>
                 <p className="text-slate-700 leading-relaxed whitespace-pre-line">
                   {villa?.description || "Details coming soon."}
@@ -302,7 +351,7 @@ export default function VillaPage() {
             )}
 
             {tab === "feat" && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section id="features" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Features</h2>
                 <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-slate-700">
                   {((villa as any)?.amenities || []).length ? (
@@ -315,20 +364,37 @@ export default function VillaPage() {
             )}
 
             {tab === "loc" && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section id="location" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Location</h2>
                 <OSMMap lat={lat} lng={lng} zoom={10.5} />
               </section>
             )}
 
             {tab === "gal" && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section id="gallery" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Gallery</h2>
                 {images.length ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {images.map((g, i) => (
-                      <button key={i} onClick={() => { setLbStart(i); setLbOpen(true); }} className="relative aspect-[4/3] overflow-hidden ring-1 ring-slate-200 rounded-xl focus:outline-none">
-                        <img src={g} className="absolute inset-0 w-full h-full object-cover" />
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setLbStart(i);
+                          setLbOpen(true);
+                        }}
+                        className="relative aspect-[4/3] overflow-hidden ring-1 ring-slate-200 rounded-xl focus:outline-none"
+                        aria-label={`Open image ${i + 1}`}
+                      >
+                        <Image
+                          src={g}
+                          alt=""
+                          fill
+                          unoptimized
+                          placeholder="blur"
+                          blurDataURL={BLUR}
+                          sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                          className="object-cover"
+                        />
                       </button>
                     ))}
                   </div>
@@ -401,6 +467,19 @@ export default function VillaPage() {
 
       {/* Lightbox */}
       <Lightbox images={images} isOpen={lbOpen} startIndex={lbStart} onClose={() => setLbOpen(false)} />
+
+      {/* Ken Burns keyframes (scoped) */}
+      <style jsx global>{`
+        @keyframes m2i-kenburns {
+          0% { transform: scale(1.0); }
+          100% { transform: scale(1.05); }
+        }
+        .kenburns {
+          animation: m2i-kenburns 25s ease-in-out infinite alternate;
+          transform-origin: center center;
+          will-change: transform;
+        }
+      `}</style>
     </>
   );
 }
