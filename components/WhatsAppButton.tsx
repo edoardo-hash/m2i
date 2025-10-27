@@ -2,7 +2,7 @@
 import React from "react";
 
 const WA_NUMBER =
-  process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "+34696320091"; // set your number here or in Vercel env
+  process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "+34671349592"; // set your number here or in Vercel env
 
 export default function WhatsAppButton() {
   const href = `https://wa.me/${WA_NUMBER.replace(/\D/g, "")}`;
