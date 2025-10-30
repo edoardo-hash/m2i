@@ -1,377 +1,225 @@
+// pages/index.tsx
+"use client";
+
 import Head from "next/head";
-import { useEffect, useState } from "react";
-import { useHeaderFade } from "../lib/useHeaderFade";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { availability, eur0, monthlyFromVilla } from "../lib/pricing";
 
-/**
- * Assets expected in /public:
- *  - es-vedra-hero.jpg
- *  - move2ibiza-logo.png
- */
-
-type VillaItem = {
-  slug?: string;
-  title?: string;
-  location?: string;
-  city?: string;
-  destination?: string;
-  cover?: string;
-  images?: string[];
-  photos?: Array<{ url?: string; src?: string }>;
-  gallery?: Array<{ url?: string; src?: string }>;
-  meta?: {
-    bedrooms?: number | string;
-    bathrooms?: number | string;
-    guests?: number | string;
-    prices?: {
-      annual?: number | string;
-      monthly?: number | string;
-      summer?: number | string;
-      winter?: number | string;
-    };
-  };
-  priceAnnual?: number | string;
-  annual?: number | string;
-  price?: { annual?: number | string; monthly?: number | string; summer?: number | string; winter?: number | string };
-  pricing?: { annual?: number | string; monthly?: number | string; summer?: number | string; winter?: number | string };
-  yearly?: number | string;
-  rent?: { annual?: number | string; monthly?: number | string; summer?: number | string; winter?: number | string };
-};
+type Villa = any;
 
 export default function Home() {
-  const [villas, setVillas] = useState<VillaItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [villas, setVillas] = useState<Villa[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState("");  
+  const [budgetRaw, setBudgetRaw] = useState<string>("");
+  const [showAbout, setShowAbout] = useState(false);
+  const aboutRef = useRef<HTMLElement | null>(null);
 
-  // smooth fading header (replaces old "scrolled" boolean)
-  const { style: headerStyle, light } = useHeaderFade(160);
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  // -------- helpers --------
-  const firstImage = (v: VillaItem): string | undefined => {
-    if (v.cover) return v.cover;
-    if (v.images?.[0]) return v.images[0];
-    const p = v.photos?.find((x) => x.url || x.src);
-    if (p?.url || p?.src) return (p.url || p.src) as string;
-    const g = v.gallery?.find((x) => x.url || x.src);
-    return (g?.url || g?.src) as string | undefined;
-  };
-
-  const loc = (v: VillaItem) => v.location || v.city || v.destination || "Ibiza";
-
-  // Build one line with available prices in order: winter -> summer -> year
-  const formatPriceLine = (v: any): string | undefined => {
-    const toNumber = (x: unknown) =>
-      typeof x === "string" ? Number((x as string).replace(/[^\d.]/g, "")) : typeof x === "number" ? x : NaN;
-    const eur = (n: number) =>
-      new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-
-    const pick = (...vals: unknown[]) => {
-      const n = vals.map(toNumber).find((x) => Number.isFinite(x) && (x as number) > 0);
-      return Number.isFinite(n as number) ? (n as number) : undefined;
-    };
-
-    const winter = pick(v?.meta?.prices?.winter, v?.price?.winter, v?.pricing?.winter, v?.rent?.winter);
-    const summer = pick(v?.meta?.prices?.summer, v?.price?.summer, v?.pricing?.summer, v?.rent?.summer);
-    const annual = pick(
-      v?.meta?.prices?.annual,
-      v?.priceAnnual,
-      v?.annual,
-      v?.price?.annual,
-      v?.pricing?.annual,
-      v?.yearly,
-      v?.rent?.annual
-    );
-
-    const parts: string[] = [];
-    if (winter) parts.push(`${eur(winter)} / winter`);
-    if (summer) parts.push(`${eur(summer)} / summer`);
-    if (annual) parts.push(`${eur(annual)} / year`);
-
-    return parts.length ? parts.join(" - ") : undefined;
-  };
-
-  // -------- load villas --------
+  // Fetch villas
   useEffect(() => {
     (async () => {
-      try {
-        const res = await fetch("/api/invenio/villas");
-        const data = await res.json();
-        setVillas(data?.villas ?? []);
-      } catch (e) {
-        console.error("Failed to load villas", e);
-      } finally {
-        setLoading(false);
-      }
+      const res = await fetch("/api/invenio/villas");
+      const data = await res.json();
+      const list = data?.villas || data || [];
+      setVillas(list);
     })();
   }, []);
+
+  // Budget (debounced parse)
+  const [budget, setBudget] = useState<number | undefined>();
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const n = Number(budgetRaw.replace(/[^\d.]/g, ""));
+      setBudget(Number.isFinite(n) && n > 0 ? n : undefined);
+    }, 250);
+    return () => clearTimeout(id);
+  }, [budgetRaw]);
+
+  // Compute available locations based on budget
+  const availableLocations = useMemo(() => {
+    const pool = villas.filter(v => {
+      if (!budget) return true;
+      const m = monthlyFromVilla(v);
+      return typeof m === 'number' && m <= budget;
+    });
+    const setLoc = new Set<string>();
+    for (const v of pool) {
+      const loc = (v.location || v.city || v.destination || "").trim();
+      if (loc) setLoc.add(loc);
+    }
+    return Array.from(setLoc).sort((a,b)=>a.localeCompare(b));
+  }, [villas, budget]);
+
+  // If current selection is no longer available, reset it
+  useEffect(() => {
+    if (selectedLocation && !availableLocations.includes(selectedLocation)) {
+      setSelectedLocation(""); 
+    }
+  }, [availableLocations, selectedLocation]);
+
+  // Filtered list for the grid
+  const filtered = useMemo(() => {
+    return villas.filter(v => {
+      if (budget) {
+        const m = monthlyFromVilla(v);
+        if (!(typeof m === 'number' && m <= budget)) return false;
+      }
+      if (selectedLocation) {
+        const loc = (v.location || v.city || v.destination || "").trim();
+        if (loc !== selectedLocation) return false;
+      }
+      return true;
+    });
+  }, [villas, budget, selectedLocation]);
+
+  // About toggle via hash
+  useEffect(() => {
+    const applyHash = () => {
+      const wantAbout = window.location.hash.toLowerCase() === '#about';
+      setShowAbout(wantAbout);
+      if (wantAbout && aboutRef.current) aboutRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
+
+  const openAbout = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    setShowAbout(true);
+    const url = new URL(window.location.href);
+    url.hash = 'about';
+    window.history.replaceState({}, '', url.toString());
+    setTimeout(() => aboutRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
 
   return (
     <>
       <Head>
-        <title>Move2Ibiza — Luxury Long-Term Villas</title>
+        <title>Move2Ibiza — Exclusive long-term rentals in Ibiza</title>
       </Head>
 
-      {/* Header (transparent over hero, gold hovers like Home) */}
-      <header
-        className="fixed top-0 inset-x-0 z-50 transition-[background-color] duration-150"
-        style={headerStyle}
-      >
-        <div className="mx-auto max-w-7xl h-14 sm:h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2" aria-label="Move2Ibiza home">
-            <img src="/m2i-logo.png" alt="Move2Ibiza logo" className="h-[2.6rem] w-auto" />
-            <span className={`${light ? "text-white" : "text-slate-900"} font-semibold tracking-wide text-sm sm:text-base`}>
-              Move2Ibiza
-            </span>
-          </a>
-          <nav className={`hidden sm:flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
-            <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Start your search</a>
-            <a href="/#featured" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Featured</a>
-            <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
-          </nav>
-        </div>
-      </header>
-
-      {/* Mobile menu button (sm and below) */}
-      <div className="sm:hidden fixed top-2 right-3 z-[60]">
-        <button
-          aria-label="Open menu"
-          onClick={() => setMobileOpen(true)}
-          className={`rounded-full p-2 ring-1 ring-white/40 backdrop-blur-md ${light ? "bg-white/10 text-white" : "bg-white text-slate-700 ring-slate-300"}`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
-      </div>
-
-      {/* Mobile nav overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/50" onClick={() => setMobileOpen(false)}>
-          <div
-            className="absolute right-0 top-0 h-full w-4/5 max-w-xs bg-white shadow-xl p-6 flex flex-col gap-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <img src="/m2i-logo.png" alt="Move2Ibiza" className="h-8 w-auto" />
-                <span className="font-semibold text-slate-900">Move2Ibiza</span>
-              </div>
-              <button aria-label="Close menu" onClick={() => setMobileOpen(false)} className="p-1 rounded-full hover:bg-slate-100">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M6.225 4.811 4.81 6.225 10.586 12 4.81 17.775l1.414 1.414L12 13.414l5.775 5.775 1.414-1.414L13.414 12l5.775-5.775-1.414-1.414L12 10.586z"/></svg>
-              </button>
-            </div>
-            <nav className="flex flex-col text-slate-700 text-base">
-              <a href="/#featured" className="py-2 border-b border-slate-100">Featured</a>
-              <a href="/#search" className="py-2 border-b border-slate-100">Start your search</a>
-              <a href="/#contact" className="py-2">Contact</a>
-            </nav>
-          </div>
-        </div>
-      )}
-
-
-      {/* ===== HERO (unchanged) ===== */}
-      <section
-        className="relative h-[90vh] flex flex-col justify-center text-center text-white bg-cover bg-center overflow-hidden"
-        style={{ backgroundImage: "url('/es-vedra-hero.jpg')" }}
-      >
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="relative z-10 max-w-3xl mx-auto px-6">
-          <h1 className="text-5xl sm:text-6xl font-bold leading-tight mb-4">
-            Luxury long-term villas <br /> in Ibiza.
+      {/* HERO */}
+      <section className="relative h-[80vh] flex items-center justify-center text-center bg-black">
+        <Image
+          src="/es-vedra-hero.jpg"
+          alt="Ibiza coastline"
+          fill
+          className="object-cover opacity-80"
+          priority
+        />
+        <div className="relative z-10 text-white">
+          <h1 className="font-serif text-4xl sm:text-6xl font-semibold">
+            Exclusive long-term rentals in Ibiza
           </h1>
-          <p className="text-lg sm:text-xl text-gray-200 mb-10">
-            Handpicked homes for extended stays — privacy, views, and concierge-level comfort.
+          <p className="mt-4 text-lg opacity-90">
+            Selected villas and apartments for those who want to call Ibiza home.
           </p>
 
-          <div className="flex justify-center gap-4 mb-12">
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
-              href="#featured"
-              className="rounded-full bg-[#C6A36C] text-slate-900 px-6 py-3 text-base font-semibold hover:bg-[#b8925e]"
+              href="#grid"
+              className="inline-flex items-center rounded-full px-6 py-3 font-semibold text-slate-900"
+              style={{ background: "#C6A36C" }}
             >
-              Explore Villas
+              Explore properties
             </a>
             <a
-              href="#search"
-              className="rounded-full bg-white/20 border border-white/40 px-6 py-3 text-base font-semibold hover:bg-white/30"
+              href="#about"
+              onClick={openAbout}
+              className="inline-flex items-center rounded-full px-6 py-3 ring-1 ring-white/30 text-white"
             >
-              Start your search
+              About us
             </a>
-          </div>
-
-          <div
-            id="search"
-            className="flex flex-wrap justify-center gap-2 bg-white/10 backdrop-blur-sm-sm rounded-2xl py-4 px-6 max-w-3xl mx-auto"
-          >
-            <input
-              type="text"
-              placeholder="Location (e.g., Santa Gertrudis)"
-              className="rounded-xl px-4 py-2 text-slate-900 bg-white/90 w-[230px] placeholder-slate-500 focus:outline-none"
-            />
-            <select className="rounded-xl px-4 py-2 text-slate-900 bg-white/90 w-[150px] focus:outline-none">
-              <option>Bedrooms</option>
-              <option>1</option>
-              <option>2</option>
-              <option>3</option>
-              <option>4+</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Monthly budget (€)"
-              className="rounded-xl px-4 py-2 text-slate-900 bg-white/90 w-[200px] placeholder-slate-500 focus:outline-none"
-            />
-            <button className="rounded-xl bg-[#C6A36C] text-slate-900 font-semibold px-6 py-2 hover:bg-[#b8925e]">
-              Search
-            </button>
           </div>
         </div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white to-transparent" />
-        <svg className="absolute -bottom-1 left-0 right-0 w-full text-white" viewBox="0 0 1440 48" preserveAspectRatio="none" aria-hidden="true">
-          <path fill="currentColor" d="M0 48h1440V0c-120 24-240 36-360 36S840 24 720 24 480 36 360 36 120 24 0 0v48z"/>
-        </svg>
       </section>
 
-      {/* ===== FEATURED (full-bleed, squared, 3-up, serif headings) ===== */}
+      {/* SEARCH */}
+      <section className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-12" id="grid">
+        <form className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10" onSubmit={(e)=>e.preventDefault()}>
+          <select
+            value={selectedLocation}
+            onChange={(e) => setSelectedLocation(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <option value="">All locations</option>
+            {availableLocations.map(loc => (
+              <option value={loc} key={loc}>{loc}</option>
+            ))}
+          </select>
+
+          <input
+            inputMode="numeric"
+            placeholder="Monthly budget (€)"
+            value={budgetRaw}
+            onChange={(e)=>setBudgetRaw(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+          />
+
+          <button type="submit" className="rounded-xl bg-[#C6A36C] px-4 py-3 font-semibold text-slate-900">
+            Search
+          </button>
+        </form>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((v) => {
+            const m = monthlyFromVilla(v);
+            const { hasWinter, hasSummer, hasAnnual } = availability(v);
+            return (
+              <div key={v.id || v.slug} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <img src={v.cover || v.image || "/placeholder.jpg"} alt={v.title} className="h-56 w-full object-cover" />
+                <div className="p-4">
+                  <h3 className="font-serif text-lg font-semibold text-slate-900">{v.title}</h3>
+                  <p className="text-sm text-slate-600">{v.location || v.city || v.destination}</p>
+                  {typeof m === 'number' && (
+                    <p className="mt-2 font-medium text-[#C6A36C]">from {eur0(m)} / month</p>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {hasWinter && <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 text-xs px-3 py-1 ring-1 ring-slate-200">Winter (6 mo)</span>}
+                    {hasSummer && <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 text-xs px-3 py-1 ring-1 ring-slate-200">Summer (6 mo)</span>}
+                    {hasAnnual && <span className="inline-flex items-center rounded-full bg-slate-900 text-white text-xs px-3 py-1">Yearly</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ABOUT */}
       <section
-        id="featured"
-        className="-mt-10 pt-14 pb-20 transition-all duration-500 ease-out scroll-mt-16"
+        id="about"
+        ref={aboutRef as any}
+        className={`mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-16 transition-opacity duration-200 ${showAbout ? "opacity-100" : "opacity-0 pointer-events-none h-0 overflow-hidden"}`}
+        aria-hidden={showAbout ? "false" : "true"}
       >
-        {/* Header */}
-        <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10 mb-10 flex items-center justify-between border-b border-slate-200 pb-3">
-          <h2 className="font-serif text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">
-            Featured villas
-          </h2>
-          <a
-            href="#search"
-            className="text-sm sm:text-base font-medium text-[#C6A36C] hover:text-[#b8925e] transition-colors"
-          >
-            See all →
-          </a>
-        </div>
-
-        {/* FULL-BLEED GRID */}
-        <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen">
-          <div className="px-4 sm:px-6 lg:px-10 xl:px-16">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8">
-              {loading
-                ? [...Array(6)].map((_, i) => (
-                    <div key={i} className="bg-white ring-1 ring-slate-200 shadow-sm">
-                      <div className="aspect-[4/3] bg-slate-200 animate-pulse" />
-                      <div className="h-24 bg-slate-100 animate-pulse" />
-                    </div>
-                  ))
-                : villas.map((v, idx) => {
-                    const img = firstImage(v) || "/placeholder.jpg";
-                    const priceLine = formatPriceLine(v);
-                    const bedrooms = v.meta?.bedrooms ?? "—";
-                    const bathrooms = v.meta?.bathrooms ?? "—";
-
-                    return (
-                      <a
-                        key={v.slug || idx}
-                        href={`/v/${v.slug}`}
-                        className="group block bg-white ring-1 ring-slate-200/70 rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition transform"
-                      >
-                        {/* IMAGE (square corners) */}
-                        <div className="relative aspect-[4/3] overflow-hidden">
-                          <img
-                            src={img}
-                            alt={v.title || "Ibiza villa"}
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                            loading="lazy"
-                            sizes="(min-width:1280px) 33vw, (min-width:640px) 50vw, 100vw"
-                          />
-                        </div>
-
-                        {/* CARD BODY */}
-                        <div className="px-5 py-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <h3 className="font-serif text-base sm:text-lg font-semibold text-slate-900 truncate">
-                              {v.title || "Untitled villa"}
-                            </h3>
-
-                            {priceLine && (
-                              <div className="text-right shrink-0 text-xs sm:text-sm font-semibold text-slate-900 max-w-[55%] sm:max-w-[60%] leading-snug">
-                                {priceLine}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="mt-2 flex items-center gap-4 text-sm text-slate-600">
-                            <span className="truncate">{loc(v)}</span>
-                          </div>
-
-                          {/* Icons + words */}
-                          <div className="mt-2 flex items-center gap-6 text-sm text-slate-700">
-                            <span className="inline-flex items-center gap-2">
-                              {/* bed icon */}
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                <path d="M3 7h18M6 7v7m12-7v7M3 14h18v3H3z" strokeWidth="1.5" />
-                              </svg>
-                              <span className="whitespace-nowrap">{bedrooms} bedrooms</span>
-                            </span>
-                            <span className="inline-flex items-center gap-2">
-                              {/* bath icon */}
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                <path d="M7 10V6a2 2 0 1 1 4 0v4m7 0H4v5a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-5Z" strokeWidth="1.5" />
-                              </svg>
-                              <span className="whitespace-nowrap">{bathrooms} bathrooms</span>
-                            </span>
-                          </div>
-                        </div>
-                      </a>
-                    );
-                  })}
-            </div>
-          </div>
+        <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-slate-900">About Move2Ibiza</h2>
+        <div className="mt-4 text-slate-700 leading-relaxed space-y-4">
+          <p>
+            At Move2Ibiza, we curate a handpicked selection of exclusive villas and apartments designed for those seeking more than a stay — a lifestyle.
+            Our mission is to make your transition to island living effortless, combining exceptional properties with discreet, end-to-end support.
+          </p>
+          <p>
+            With deep local knowledge and a trusted network built over years in Ibiza’s real estate market, we help you find not just a home, but the right fit for your life here.
+            From first viewing to settling in, every detail is managed with precision, privacy, and care.
+          </p>
+          <p><strong>Move2Ibiza — where relocation meets refinement.</strong></p>
         </div>
       </section>
-      {/* ===== CONTACT ===== */}
-      <section id="contact" className="py-20 bg-white scroll-mt-16">
-        <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
-          <div className="max-w-2xl mb-10">
-            <h2 className="font-serif text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">Get in touch</h2>
-            <p className="mt-2 text-slate-600">Tell us about your ideal stay and we’ll curate villa options tailored to your dates, budget, and vibe.</p>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <form className="bg-white ring-1 ring-slate-200/70 rounded-2xl p-6 sm:p-8 shadow-sm">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Name</label>
-                  <input name="name" required className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Email</label>
-                  <input name="email" type="email" required className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Phone / WhatsApp</label>
-                  <input name="phone" className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Dates</label>
-                  <input name="dates" placeholder="e.g. Jan 5 – Feb 2, 2026" className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-slate-700">Message</label>
-                <textarea name="message" rows={5} className="mt-1 w-full rounded-lg border-slate-300 focus:border-[#C6A36C] focus:ring-[#C6A36C]" placeholder="Tell us location preferences, bedrooms, budget, etc." />
-              </div>
-              <button className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#1B3A4B] px-5 py-3 text-white font-medium hover:opacity-95 focus-visible:outline-[#C6A36C]">
-                Send inquiry
-              </button>
-            </form>
-            <div className="bg-gradient-to-b from-slate-50 to-white ring-1 ring-slate-200/70 rounded-2xl p-6 sm:p-8">
-              <div className="space-y-4 text-slate-700">
-                <p><strong>Email:</strong> <a className="underline underline-offset-4 decoration-[#C6A36C]" href="mailto:stay@move2ibiza.com">stay@move2ibiza.com</a></p>
-                <p><strong>Phone:</strong> <a className="underline underline-offset-4 decoration-[#C6A36C]" href="tel:+34999999999">+34 999 99 99 99</a></p>
-                <p><strong>WhatsApp:</strong> <a className="underline underline-offset-4 decoration-[#C6A36C]" href="https://wa.me/34999999999">Chat with us</a></p>
-              </div>
-              <div className="mt-8 p-4 rounded-xl bg-white ring-1 ring-slate-200/70">
-                <p className="text-sm text-slate-600">Prefer email? We typically reply within a few hours (Europe/Madrid time).</p>
-              </div>
-            </div>
-          </div>
-        </div>
+
+      {/* CONTACT */}
+      <section id="contact" className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-16">
+        <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-slate-900">Contact us</h2>
+        <form className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4" onSubmit={(e)=>e.preventDefault()}>
+          <input name="name" placeholder="Name" className="rounded-xl border border-slate-200 px-4 py-3" required />
+          <input name="email" type="email" placeholder="Email" className="rounded-xl border border-slate-200 px-4 py-3" required />
+          <input name="phone" placeholder="Phone / WhatsApp" className="rounded-xl border border-slate-200 px-4 py-3 sm:col-span-2" />
+          <textarea name="message" rows={5} placeholder="Message" className="rounded-xl border border-slate-200 px-4 py-3 sm:col-span-2" required />
+          <button type="submit" className="mt-2 w-fit rounded-full px-5 py-3 font-semibold" style={{ background: "#C6A36C", color: "#1f2937" }}>
+            Send inquiry
+          </button>
+        </form>
       </section>
-    
     </>
   );
 }
