@@ -254,38 +254,42 @@ export default function VillaPage() {
           </div>
         )}
 
-        {/* thumbnails */}
-        {images.length > 1 && (
-          <div className="relative -mt-8 sm:-mt-10">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-              <div className="inline-flex gap-2 rounded-2xl bg-white/90 backdrop-blur-sm ring-1 ring-slate-200 p-2 shadow-xl">
-                {images.slice(0, 20).map((src, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setIdx(i)}
-                    aria-label={`View image ${i + 1}`}
-                    className={`relative h-16 w-24 overflow-hidden rounded-md transition-all ${
-                      i === idx
-                        ? "ring-4 ring-[#C6A36C] shadow-[0_0_0_4px_rgba(198,163,108,0.35)]"
-                        : "ring-1 ring-slate-200 hover:ring-slate-300"
-                    }`}
-                  >
-                    <Image
-                      src={src}
-                      alt=""
-                      fill
-                      unoptimized
-                      placeholder="blur"
-                      blurDataURL={BLUR}
-                      sizes="192px"
-                      className="object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+{/* thumbnails */}
+{images.length > 1 && (
+  <div className="relative -mt-8 sm:-mt-10">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {/* make only this area horizontally scrollable */}
+      <div className="overflow-x-auto no-scrollbar">
+        <div className="flex gap-2 rounded-2xl bg-white/90 backdrop-blur-sm ring-1 ring-slate-200 p-2 shadow-xl w-max">
+          {images.slice(0, 40).map((src, i) => (
+            <button
+              key={i}
+              onClick={() => setIdx(i)}
+              aria-label={`View image ${i + 1}`}
+              className={`relative h-16 w-24 flex-none overflow-hidden rounded-md transition-all ${
+                i === idx
+                  ? "ring-4 ring-[#C6A36C] shadow-[0_0_0_4px_rgba(198,163,108,0.35)]"
+                  : "ring-1 ring-slate-200 hover:ring-slate-300"
+              }`}
+            >
+              <Image
+                src={src}
+                alt=""
+                fill
+                unoptimized
+                placeholder="blur"
+                blurDataURL={BLUR}
+                sizes="192px"
+                className="object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
       </section>
 
       {/* Prices pill */}
