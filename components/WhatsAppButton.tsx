@@ -14,7 +14,7 @@ export default function WhatsAppButton({
   className = "",
   size = 56,
 }: Props) {
-  const fallback = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "+34999999999";
+  const fallback = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "+34671349592";
   const num = (phone || fallback).replace(/\D/g, "");
   const href = `https://wa.me/${num}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
 
