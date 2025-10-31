@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { availability, eur0, monthlyFromVilla } from '../lib/pricing';
+import SiteHeaderHero from "../components/SiteHeaderHero";
 
 type Villa = any;
 const getSlug = (v: Villa): string | undefined =>
@@ -121,6 +122,8 @@ export default function Home() {
       <Head>
         <title>Move2Ibiza — Exclusive long-term rentals in Ibiza</title>
       </Head>
+
+<SiteHeaderHero />
 
       {/* HERO */}
       <section className="relative h-[80vh] flex items-center justify-center text-center bg-black">
