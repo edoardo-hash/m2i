@@ -28,16 +28,18 @@ const toBase64 = (str: string) =>
 export default function ShimmerImage({ radius = "rounded-t-2xl", ...props }: Props) {
   const [loaded, setLoaded] = useState(false);
 
-  return (
-    <Image
-      {...props}
-      className={`${radius} object-cover ${props.className || ""} ${
-        loaded ? "opacity-100" : "opacity-0"
-      } transition-opacity duration-300`}
-      placeholder="blur"
-      blurDataURL={`data:image/svg+xml;base64,${toBase64(shimmer(700, 475))}`}
-      onLoadingComplete={() => setLoaded(true)}
-      loading={props.priority ? "eager" : "lazy"}
-    />
-  );
-}
+return (
+  <Image
+    src={props.src}
+    alt={props.alt || ""}
+    {...props}
+    className={`${radius} object-cover ${props.className || ""} ${
+      loaded ? "opacity-100" : "opacity-0"
+    }`}
+    placeholder="blur"
+    blurDataURL="data:image/svg+xml;base64,..."
+    onLoadingComplete={() => setLoaded(true)}
+    loading="lazy"
+  />
+);
+
