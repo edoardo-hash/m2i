@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { availability, eur0, monthlyFromVilla } from '../lib/pricing';
-import SiteHeaderHero from "../components/SiteHeaderHero";
+import SiteHeaderHero from '../components/SiteHeaderHero';
 
 type Villa = any;
 const getSlug = (v: Villa): string | undefined =>
@@ -33,7 +33,7 @@ export default function Home() {
     })();
   }, []);
 
-  // Budget debounce
+  // Debounce numeric budget parsing
   useEffect(() => {
     const id = setTimeout(() => {
       const n = Number(String(budgetRaw).replace(/[^\d.]/g, ''));
@@ -42,67 +42,61 @@ export default function Home() {
     return () => clearTimeout(id);
   }, [budgetRaw]);
 
-  // Locations for dropdown
+  // Locations (unique + sorted)
   const availableLocations = useMemo(() => {
-    const pool = villas;
     const setLoc = new Set<string>();
-    for (const v of pool) {
-      const loc = (v.location || v.city || v.destination || '').trim();
+    for (const v of villas) {
+      const loc = (v?.location || v?.city || v?.destination || '').trim();
       if (loc) setLoc.add(loc);
     }
     return Array.from(setLoc).sort((a, b) => a.localeCompare(b));
   }, [villas]);
 
-  // Reset invalid selection
+  // If the chosen location disappears, reset it
   useEffect(() => {
     if (selectedLocation && !availableLocations.includes(selectedLocation)) {
       setSelectedLocation('');
     }
   }, [availableLocations, selectedLocation]);
 
-  // --- Filtering logic
+  // Filtering
   const filtered = useMemo(() => {
     const list = Array.isArray(villas) ? villas : [];
     return list.filter((v) => {
-      // Budget filter
       if (budget) {
         const m = monthlyFromVilla(v);
         if (!(typeof m === 'number' && m <= budget)) return false;
       }
-
-      // Location
       if (selectedLocation) {
-        const loc = (v.location || v.city || v.destination || '').trim();
+        const loc = (v?.location || v?.city || v?.destination || '').trim();
         if (loc !== selectedLocation) return false;
       }
-
-      // Rental type
       if (rentalType !== 'any') {
         const { hasWinter, hasSummer, hasAnnual } = availability(v);
         if (
           (rentalType === 'winter' && !hasWinter) ||
           (rentalType === 'summer' && !hasSummer) ||
           (rentalType === 'yearly' && !hasAnnual)
-        )
+        ) {
           return false;
+        }
       }
-
       return true;
     });
   }, [villas, budget, selectedLocation, rentalType]);
 
-  // About toggle via hash
+  // About via hash
   useEffect(() => {
-    const applyHash = () => {
+    const apply = () => {
       const wantAbout = window.location.hash.toLowerCase() === '#about';
       setShowAbout(wantAbout);
       if (wantAbout && aboutRef.current) {
         aboutRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     };
-    applyHash();
-    window.addEventListener('hashchange', applyHash);
-    return () => window.removeEventListener('hashchange', applyHash);
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
   }, []);
 
   const openAbout = (e?: React.MouseEvent) => {
@@ -111,10 +105,9 @@ export default function Home() {
     const url = new URL(window.location.href);
     url.hash = 'about';
     window.history.replaceState({}, '', url.toString());
-    setTimeout(
-      () => aboutRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-      0
-    );
+    setTimeout(() => {
+      aboutRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   };
 
   return (
@@ -123,7 +116,7 @@ export default function Home() {
         <title>Move2Ibiza — Exclusive long-term rentals in Ibiza</title>
       </Head>
 
-<SiteHeaderHero />
+      <SiteHeaderHero />
 
       {/* HERO */}
       <section className="relative h-[80vh] flex items-center justify-center text-center bg-black">
@@ -136,6 +129,9 @@ export default function Home() {
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/40 to-transparent" />
         <div className="relative z-10 text-white">
+          <div className="text-xl sm:text-3xl tracking-wide font-sans mb-3">
+            Move2Ibiza
+          </div>
           <h1 className="font-serif text-4xl sm:text-6xl font-semibold">
             Exclusive long-term rentals in Ibiza
           </h1>
@@ -161,7 +157,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Floating Contact Button */}
+      {/* Floating contact button */}
       <a
         href="#contact"
         className="fixed left-4 bottom-4 z-40 rounded-full bg-white/90 backdrop-blur px-4 py-2 text-slate-800 shadow ring-1 ring-black/10 hover:bg-white"
@@ -170,7 +166,7 @@ export default function Home() {
       </a>
 
       {/* SEARCH + GRID */}
-      <section className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-12" id="grid">
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12" id="grid">
         <form
           className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-10"
           onSubmit={(e) => e.preventDefault()}
@@ -215,7 +211,8 @@ export default function Home() {
           </button>
         </form>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Auto-fitting grid */}
+        <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(300px,1fr))]">
           {filtered.length === 0 ? (
             <p className="text-center text-slate-500 col-span-full">
               No properties match your filters.
@@ -224,8 +221,22 @@ export default function Home() {
             filtered.map((v) => {
               const slug = getSlug(v);
               const href = slug ? `/v/${slug}` : undefined;
-              const m = monthlyFromVilla(v);
               const { hasWinter, hasSummer, hasAnnual } = availability(v);
+
+              const priceLine = (label: string, p?: number) =>
+                typeof p === 'number' ? (
+                  <p key={label} className="font-medium text-[#C6A36C]">
+                    {label}: {eur0(p)} / month
+                  </p>
+                ) : null;
+
+              // Try to read explicit per-type fields; fall back to monthlyFromVilla if available
+              const yearlyPrice =
+                v?.pricing?.yearly ?? v?.price_yearly ?? (monthlyFromVilla as any)?.(v, 'yearly');
+              const summerPrice =
+                v?.pricing?.summer ?? v?.price_summer ?? (monthlyFromVilla as any)?.(v, 'summer');
+              const winterPrice =
+                v?.pricing?.winter ?? v?.price_winter ?? (monthlyFromVilla as any)?.(v, 'winter');
 
               const CardInner = (
                 <>
@@ -251,26 +262,14 @@ export default function Home() {
                     <p className="text-sm text-slate-600">
                       {v.location || v.city || v.destination}
                     </p>
-                    {typeof m === 'number' && (
-                      <p className="mt-2 font-medium text-[#C6A36C]">
-                        from {eur0(m)} / month
-                      </p>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {hasWinter && (
-                        <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 text-xs px-3 py-1 ring-1 ring-slate-200">
-                          Winter (6 mo)
-                        </span>
-                      )}
-                      {hasSummer && (
-                        <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 text-xs px-3 py-1 ring-1 ring-slate-200">
-                          Summer (6 mo)
-                        </span>
-                      )}
-                      {hasAnnual && (
-                        <span className="inline-flex items-center rounded-full bg-slate-900 text-white text-xs px-3 py-1">
-                          Yearly
-                        </span>
+
+                    {/* Per-type prices, no "from" and no badges */}
+                    <div className="mt-3 space-y-1">
+                      {hasAnnual && priceLine('Yearly rental', yearlyPrice)}
+                      {hasSummer && priceLine('Summer rental', summerPrice)}
+                      {hasWinter && priceLine('Winter rental', winterPrice)}
+                      {!hasAnnual && !hasSummer && !hasWinter && (
+                        <p className="font-medium text-slate-400">Price on request</p>
                       )}
                     </div>
                   </div>
@@ -294,7 +293,7 @@ export default function Home() {
       <section
         id="about"
         ref={aboutRef as any}
-        className={`mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-16 transition-opacity duration-200 ${
+        className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 transition-opacity duration-200 ${
           showAbout ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 overflow-hidden'
         }`}
       >
@@ -321,18 +320,22 @@ export default function Home() {
       </section>
 
       {/* CONTACT */}
-      <section id="contact" className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-16">
+      <section id="contact" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
         <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-slate-900">
           Contact us
         </h2>
         <p className="mt-4 text-slate-600 leading-relaxed">
-          <strong>Moving to Ibiza begins with a conversation.</strong><br />
+          <strong>Moving to Ibiza begins with a conversation.</strong>
+          <br />
           Whether you’re searching for a villa, an apartment, or simply exploring your options,
-          our team is here to guide you. We value privacy, clarity, and personal attention — every
-          enquiry is handled with care and discretion.
-          <br /><br />
-          Let’s find your place in Ibiza.<br />
-          📧 <a href="mailto:M2Ibiza@inveniohomes.com" className="underline">M2Ibiza@inveniohomes.com</a><br />
+          our team is here to guide you. We value privacy, clarity, and personal attention —
+          every enquiry is handled with care and discretion.
+          <br />
+          <br />
+          Let’s find your place in Ibiza.
+          <br />
+          📧 <a href="mailto:M2Ibiza@inveniohomes.com" className="underline">M2Ibiza@inveniohomes.com</a>
+          <br />
           📞 <a href="tel:+34671349592" className="underline">+34 671 349 592</a>
         </p>
         <form
@@ -343,7 +346,11 @@ export default function Home() {
           <input name="email" type="email" placeholder="Email" className="rounded-xl border border-slate-200 px-4 py-3" required />
           <input name="phone" placeholder="Phone / WhatsApp" className="rounded-xl border border-slate-200 px-4 py-3 sm:col-span-2" />
           <textarea name="message" rows={5} placeholder="Message" className="rounded-xl border border-slate-200 px-4 py-3 sm:col-span-2" required />
-          <button type="submit" className="mt-2 w-fit rounded-full px-5 py-3 font-semibold" style={{ background: '#C6A36C', color: '#1f2937' }}>
+          <button
+            type="submit"
+            className="mt-2 w-fit rounded-full px-5 py-3 font-semibold"
+            style={{ background: '#C6A36C', color: '#1f2937' }}
+          >
             Send inquiry
           </button>
         </form>

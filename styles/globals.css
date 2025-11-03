@@ -5,8 +5,18 @@
   --color-accent: #C6A36C; /* Gold */
 }
 
-/* Global base styles */
-html, body {
+/* --- Custom Font: Zalando Sans Condensed Light --- */
+@font-face {
+  font-family: 'ZalandoSansCondensed';
+  src: url('/fonts/ZalandoSans_Condensed-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Global Base Styles --- */
+html,
+body {
   background-color: var(--color-slate-50);
   color: var(--color-slate-800);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -18,4 +28,16 @@ html, body {
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* ---- Fade-up on scroll (respects reduced motion) ---- */
+@keyframes m2i-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-fade-up {
+    animation: m2i-fade-up 500ms ease both;
+  }
 }

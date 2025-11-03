@@ -1,7 +1,5 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function SiteHeaderHero() {
@@ -19,38 +17,29 @@ export default function SiteHeaderHero() {
         isScrolled ? "bg-white/90 backdrop-blur-md shadow-sm" : "bg-transparent"
       }`}
     >
-      <div className="mx-auto max-w-7xl h-16 px-4 sm:px-6 flex items-center justify-between">
-        {/* Logo + wordmark */}
-        <Link href="/" aria-label="Move2Ibiza home" className="flex items-center gap-2">
-          <Image
-            src="/m2i-logo.png"
-            alt="Move2Ibiza logo"
-            width={32}
-            height={32}
-            className="h-8 w-auto"
-          />
-          <span
-            className={`hidden sm:inline text-sm font-semibold tracking-wide ${
-              isScrolled ? "text-gray-900" : "text-white"
-            }`}
-          >
-            Move2Ibiza
-          </span>
-        </Link>
-
-        {/* Nav */}
+      <div className="mx-auto max-w-7xl h-16 px-4 sm:px-6 flex items-center justify-end">
+        {/* Navigation Menu */}
         <nav
-          className={`hidden sm:flex items-center gap-6 text-sm ${
+          className={`hidden sm:flex items-center gap-6 text-sm font-medium ${
             isScrolled ? "text-gray-900" : "text-white"
           }`}
         >
-          <a href="/#search" className="hover:underline underline-offset-4 decoration-[#C6A36C]">
+          <a
+            href="/#search"
+            className="hover:underline underline-offset-4 decoration-[#C6A36C]"
+          >
             Explore
           </a>
-          <a href="/#about" className="hover:underline underline-offset-4 decoration-[#C6A36C]">
+          <a
+            href="/#about"
+            className="hover:underline underline-offset-4 decoration-[#C6A36C]"
+          >
             About
           </a>
-          <a href="/#contact" className="hover:underline underline-offset-4 decoration-[#C6A36C]">
+          <a
+            href="/#contact"
+            className="hover:underline underline-offset-4 decoration-[#C6A36C]"
+          >
             Contact
           </a>
         </nav>
