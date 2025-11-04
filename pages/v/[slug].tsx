@@ -13,6 +13,7 @@ const OSMMap = dynamic(() => import("../../components/OSMMap"), { ssr: false });
 // --- helper types ---
 type Photo = string | { url?: string; src?: string };
 type Prices = { annual?: number | string; monthly?: number | string; summer?: number | string; winter?: number | string };
+type Amenity = string | { name?: string; label?: string; group?: string; category?: string };
 
 type Villa = {
   slug?: string;
@@ -29,7 +30,7 @@ type Villa = {
   meta?: {
     bedrooms?: number | string;
     bathrooms?: number | string;
-    guests?: number | string; // kept for API compatibility (we don't render it)
+    guests?: number | string; // compatibility
     prices?: Prices;
   };
   price?: Prices;
@@ -77,6 +78,44 @@ function collectImages(v: Villa | null): string[] {
 // tiny neutral blur placeholder
 const BLUR =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAQAICRAEAOw==";
+
+/* -------------------- FEATURES FILTERS -------------------- */
+const norm = (s?: string) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+const GROUPS_TO_HIDE = new Set<string>(["special features", "suitable for"]);
+const LABELS_TO_HIDE = new Set<string>([
+  // Special features (hide all)
+  "boat usage","breakfast chef","butler","car usage","chef","driver",
+  "eco tax on arrival 2.20€ per day per adult over 15","helicopter pad",
+  "hire car recommended","house manager","live in staff","own water",
+  "pets allowed","solar electricity","staff","waiter/waitress",
+
+  // Suitable for (hide all)
+  "couples","events","families","filming","friends","honeymoon","retreats","weddings",
+
+  // Specific items (e.g. under Security)
+  "security guard","sunloungers","massage area","dj equipmemt","smart tv","tv - satellite","slightly inclined","neighbours"]);
+
+const featureName = (a: Amenity) => (typeof a === "string" ? a : a?.name || a?.label || "");
+const featureGroup = (a: Amenity) => (typeof a === "string" ? "" : a?.group || a?.category || "");
+
+const filterFeatures = (items: Amenity[]) =>
+  (items || []).filter((item) => {
+    if (GROUPS_TO_HIDE.has(norm(featureGroup(item)))) return false;
+    if (LABELS_TO_HIDE.has(norm(featureName(item)))) return false;
+    return true;
+  });
+/* --------------------------------------------------------- */
+
+// tiny check icon for feature chips
+const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
+    <path
+      fillRule="evenodd"
+      d="M16.707 5.293a1 1 0 010 1.414l-7.25 7.25a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414l2.293 2.293 6.543-6.543a1 1 0 011.414 0z"
+      clipRule="evenodd"
+    />
+  </svg>
+);
 
 // --- main page ---
 export default function VillaPage() {
@@ -132,8 +171,20 @@ export default function VillaPage() {
   const lat = (villa as any)?.coords?.lat ?? (villa as any)?.lat ?? 38.984;
   const lng = (villa as any)?.coords?.lng ?? (villa as any)?.lng ?? 1.435;
 
+  // Filter + sort amenities
+  const amenities: Amenity[] = useMemo(() => {
+    const raw = ((villa as any)?.amenities || []) as Amenity[];
+    return filterFeatures(raw);
+  }, [villa]);
+
+  const displayedFeatures = useMemo(() => {
+    const names = amenities.map((f) => featureName(f)).filter(Boolean) as string[];
+    const byKey = new Map<string, string>();
+    names.forEach((n) => byKey.set(norm(n), n));
+    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
+  }, [amenities]);
+
   // --- Deep link tabs (hash) ---
-  // Map URL hash -> tab id
   const hashToTab = (h: string): typeof tab => {
     const key = h.replace("#", "").toLowerCase();
     if (key.startsWith("desc") || key === "") return "desc";
@@ -143,7 +194,6 @@ export default function VillaPage() {
     return "desc";
   };
 
-  // On mount & on hash change, sync tab
   useEffect(() => {
     const applyHash = () => setTab(hashToTab(window.location.hash));
     applyHash();
@@ -151,7 +201,6 @@ export default function VillaPage() {
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
-  // When tab changes, update hash (without scrolling to top)
   useEffect(() => {
     const current = window.location.hash.replace("#", "");
     const desired =
@@ -184,7 +233,7 @@ export default function VillaPage() {
               href="/"
               className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]"
             >
-              Explore
+              Home
             </a>
             <a
               href="/#about"
@@ -267,7 +316,6 @@ export default function VillaPage() {
         {images.length > 1 && (
           <div className="relative -mt-8 sm:-mt-10">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-              {/* make only this area horizontally scrollable */}
               <div className="overflow-x-auto no-scrollbar">
                 <div className="flex gap-2 rounded-2xl bg-white/90 backdrop-blur-sm ring-1 ring-slate-200 p-2 shadow-xl w-max">
                   {images.slice(0, 40).map((src, i) => (
@@ -363,11 +411,22 @@ export default function VillaPage() {
             )}
 
             {tab === "feat" && (
-              <section id="features" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Features</h2>
-                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-slate-700">
-                  {((villa as any)?.amenities || []).length ? (
-                    (villa as any).amenities.map((f: string, i: number) => <li key={i}>{f}</li>)
+              <section id="features" className="rounded-2xl border border-slate-200 bg-white/90 backdrop-blur p-6 shadow-sm">
+                <h2 className="font-serif text-xl font-semibold mb-1 text-slate-900">Features</h2>
+                <p className="text-sm text-slate-500 mb-4"></p>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {displayedFeatures.length ? (
+                    displayedFeatures.map((label, i) => (
+                      <li
+                        key={i}
+                        className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow transition-shadow"
+                      >
+                        <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
+                          <CheckIcon className="h-4 w-4" />
+                        </span>
+                        <span className="text-slate-800">{label}</span>
+                      </li>
+                    ))
                   ) : (
                     <li className="text-slate-500">No features listed.</li>
                   )}
