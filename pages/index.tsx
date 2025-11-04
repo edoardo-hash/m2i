@@ -9,10 +9,168 @@ import { availability, eur0, monthlyFromVilla } from '../lib/pricing';
 import SiteHeaderHero from '../components/SiteHeaderHero';
 
 type Villa = any;
+type RentalType = 'any' | 'winter' | 'summer' | 'yearly';
+
 const getSlug = (v: Villa): string | undefined =>
   v?.slug || v?.id || v?._id || v?.airtableId;
 
-type RentalType = 'any' | 'winter' | 'summer' | 'yearly';
+/* ---------- helpers: tolerant numeric & string reads ---------- */
+
+const readNumber = (obj: any, keys: string[]): number | undefined => {
+  for (const k of keys) {
+    const raw = obj?.[k];
+    if (raw == null) continue;
+    const n =
+      typeof raw === 'number'
+        ? raw
+        : Number(String(raw).replace(/[^\d.]/g, ''));
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
+
+const readString = (obj: any, keys: string[]): string | undefined => {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return undefined;
+};
+
+/* ---------- deep search helpers (handles nested objects/arrays) ---------- */
+
+const isPlainObject = (v: any) =>
+  v && typeof v === 'object' && !Array.isArray(v);
+
+type KeyCheck = (key: string) => boolean;
+
+const deepFindNumber = (
+  node: any,
+  keyCheck: KeyCheck
+): number | undefined => {
+  if (node == null) return undefined;
+
+  // If it's directly a number-like, accept when parent key matched
+  // (handled by caller). Here we only traverse.
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const n = deepFindNumber(item, keyCheck);
+      if (typeof n === 'number') return n;
+    }
+    return undefined;
+  }
+
+  if (isPlainObject(node)) {
+    for (const [k, v] of Object.entries(node)) {
+      const lowerK = k.toLowerCase();
+
+      if (keyCheck(lowerK)) {
+        // extract numeric value from this field
+        const n =
+          typeof v === 'number'
+            ? v
+            : Number(String(v).replace(/[^\d.]/g, ''));
+        if (Number.isFinite(n)) return n;
+      }
+
+      const n = deepFindNumber(v, keyCheck);
+      if (typeof n === 'number') return n;
+    }
+  }
+
+  return undefined;
+};
+
+/* ---------- description fallback ---------- */
+
+const parseFromDescription = (v: any, type: 'bed' | 'bath'): number | undefined => {
+  const desc =
+    readString(v, ['description', 'details', 'summary', 'info']) || '';
+  if (!desc) return undefined;
+  const re = type === 'bed'
+    ? /(\d+)\s*bed(?:room)?s?\b/i
+    : /(\d+)\s*bath(?:room)?s?\b/i;
+  const m = desc.match(re);
+  return m ? Number(m[1]) : undefined;
+};
+
+/* ---------- bedroom/bathroom resolvers (flat keys -> deep -> description) ---------- */
+
+// flat/common keys first (fast path)
+const getBedroomsFlat = (v: any) =>
+  readNumber(v, [
+    'bedrooms',
+    'bedroom',
+    'beds',
+    'beds_total',
+    'bedsTotal',
+    'bedrooms_count',
+    'bedroom_count',
+    'num_bedrooms',
+    'n_bedrooms',
+    'rooms',
+    'rooms_count',
+  ]);
+
+const getBathroomsFlat = (v: any) =>
+  readNumber(v, [
+    'bathrooms',
+    'bathroom',
+    'baths',
+    'baths_total',
+    'bathsTotal',
+    'bathrooms_count',
+    'bathroom_count',
+    'num_bathrooms',
+    'n_bathrooms',
+    'wc',
+    'toilets',
+  ]);
+
+// deep search (matches keys containing "bed" or "bath" but avoids false positives like "bedsize")
+const getBedroomsDeep = (v: any) =>
+  deepFindNumber(v, (key) =>
+    /bed(room)?s?$/.test(key) ||
+    key === 'beds' ||
+    key === 'beds_total' ||
+    key === 'bedrooms_count' ||
+    key === 'num_bedrooms'
+  );
+
+const getBathroomsDeep = (v: any) =>
+  deepFindNumber(v, (key) =>
+    /bath(room)?s?$/.test(key) ||
+    key === 'baths' ||
+    key === 'baths_total' ||
+    key === 'bathrooms_count' ||
+    key === 'num_bathrooms' ||
+    key === 'wc' ||
+    key === 'toilets'
+  );
+
+// final exported resolvers used by the card
+const getBedrooms = (v: any) =>
+  getBedroomsFlat(v) ?? getBedroomsDeep(v) ?? parseFromDescription(v, 'bed');
+
+const getBathrooms = (v: any) =>
+  getBathroomsFlat(v) ?? getBathroomsDeep(v) ?? parseFromDescription(v, 'bath');
+
+
+/* ---------- price resolvers per rental type ---------- */
+
+const priceYearly = (v: Villa) =>
+  readNumber(v, ['price_yearly', 'yearly', 'yearly_price', 'annual']) ??
+  (monthlyFromVilla as any)?.(v, 'yearly');
+
+const priceSummer = (v: Villa) =>
+  readNumber(v, ['price_summer', 'summer', 'summer_price']) ??
+  (monthlyFromVilla as any)?.(v, 'summer');
+
+const priceWinter = (v: Villa) =>
+  readNumber(v, ['price_winter', 'winter', 'winter_price']) ??
+  (monthlyFromVilla as any)?.(v, 'winter');
+
+/* ---------- component ---------- */
 
 export default function Home() {
   const [villas, setVillas] = useState<Villa[]>([]);
@@ -42,17 +200,32 @@ export default function Home() {
     return () => clearTimeout(id);
   }, [budgetRaw]);
 
-  // Locations (unique + sorted)
+  // Locations for dropdown — only show locations that have at least one villa within the active filters
   const availableLocations = useMemo(() => {
-    const setLoc = new Set<string>();
-    for (const v of villas) {
-      const loc = (v?.location || v?.city || v?.destination || '').trim();
-      if (loc) setLoc.add(loc);
-    }
-    return Array.from(setLoc).sort((a, b) => a.localeCompare(b));
-  }, [villas]);
+    const pool = Array.isArray(villas) ? villas : [];
+    const validLocations = new Set<string>();
 
-  // If the chosen location disappears, reset it
+    for (const v of pool) {
+      const { hasWinter, hasSummer, hasAnnual } = availability(v);
+      const matchesRental =
+        rentalType === 'any' ||
+        (rentalType === 'winter' && hasWinter) ||
+        (rentalType === 'summer' && hasSummer) ||
+        (rentalType === 'yearly' && hasAnnual);
+      if (!matchesRental) continue;
+
+      const m = monthlyFromVilla(v);
+      const matchesBudget = !budget || (typeof m === 'number' && m <= budget);
+      if (!matchesBudget) continue;
+
+      const loc = readString(v, ['location', 'city', 'destination']) || '';
+      if (loc) validLocations.add(loc);
+    }
+
+    return Array.from(validLocations).sort((a, b) => a.localeCompare(b));
+  }, [villas, budget, rentalType]);
+
+  // Reset invalid selection
   useEffect(() => {
     if (selectedLocation && !availableLocations.includes(selectedLocation)) {
       setSelectedLocation('');
@@ -68,7 +241,7 @@ export default function Home() {
         if (!(typeof m === 'number' && m <= budget)) return false;
       }
       if (selectedLocation) {
-        const loc = (v?.location || v?.city || v?.destination || '').trim();
+        const loc = readString(v, ['location', 'city', 'destination']) || '';
         if (loc !== selectedLocation) return false;
       }
       if (rentalType !== 'any') {
@@ -108,6 +281,31 @@ export default function Home() {
     setTimeout(() => {
       aboutRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 0);
+  };
+
+  /* ---------- UI ---------- */
+
+  const PriceChip = ({
+    label,
+    value,
+    tone = 'slate',
+  }: {
+    label: string;
+    value?: number;
+    tone?: 'gold' | 'slate';
+  }) => {
+    if (typeof value !== 'number') return null;
+    const base =
+      'inline-flex items-center rounded-full whitespace-nowrap px-2.5 py-1 text-xs font-medium';
+    const cls =
+      tone === 'gold'
+        ? `${base} bg-[#C6A36C]/15 text-[#6f5834] ring-1 ring-[#C6A36C]/30`
+        : `${base} bg-slate-100 text-slate-800 ring-1 ring-slate-200`;
+    return (
+      <span className={cls}>
+        <strong className="mr-1">{label}</strong> {eur0(value)} / month
+      </span>
+    );
   };
 
   return (
@@ -211,8 +409,14 @@ export default function Home() {
           </button>
         </form>
 
-        {/* Auto-fitting grid */}
-        <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(300px,1fr))]">
+        {/* Auto-fitting grid (centers single item) */}
+        <div
+          className={`
+            grid gap-6
+            [grid-template-columns:repeat(auto-fit,minmax(300px,1fr))]
+            ${filtered.length === 1 ? 'max-w-3xl mx-auto' : ''}
+          `}
+        >
           {filtered.length === 0 ? (
             <p className="text-center text-slate-500 col-span-full">
               No properties match your filters.
@@ -223,62 +427,84 @@ export default function Home() {
               const href = slug ? `/v/${slug}` : undefined;
               const { hasWinter, hasSummer, hasAnnual } = availability(v);
 
-              const priceLine = (label: string, p?: number) =>
-                typeof p === 'number' ? (
-                  <p key={label} className="font-medium text-[#C6A36C]">
-                    {label}: {eur0(p)} / month
-                  </p>
-                ) : null;
+              const y = priceYearly(v);
+              const s = priceSummer(v);
+              const w = priceWinter(v);
 
-              // Try to read explicit per-type fields; fall back to monthlyFromVilla if available
-              const yearlyPrice =
-                v?.pricing?.yearly ?? v?.price_yearly ?? (monthlyFromVilla as any)?.(v, 'yearly');
-              const summerPrice =
-                v?.pricing?.summer ?? v?.price_summer ?? (monthlyFromVilla as any)?.(v, 'summer');
-              const winterPrice =
-                v?.pricing?.winter ?? v?.price_winter ?? (monthlyFromVilla as any)?.(v, 'winter');
+              const title = readString(v, ['title', 'name']) || 'Untitled';
+              const location =
+                readString(v, ['location', 'city', 'destination']) || '';
+
+              const bedrooms = getBedrooms(v);
+              const bathrooms = getBathrooms(v);
 
               const CardInner = (
                 <>
                   <div className="relative w-full aspect-[4/3]">
                     <Image
                       src={v.cover || v.image || '/placeholder.jpg'}
-                      alt={v.title}
+                      alt={title}
                       fill
                       className="object-cover"
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     />
                   </div>
+
                   <div className="p-4">
                     <h3 className="font-serif text-lg font-semibold text-slate-900">
                       {href ? (
                         <Link href={href} className="hover:underline underline-offset-4">
-                          {v.title}
+                          {title}
                         </Link>
                       ) : (
-                        v.title
+                        title
                       )}
                     </h3>
-                    <p className="text-sm text-slate-600">
-                      {v.location || v.city || v.destination}
-                    </p>
 
-                    {/* Per-type prices, no "from" and no badges */}
-                    <div className="mt-3 space-y-1">
-                      {hasAnnual && priceLine('Yearly rental', yearlyPrice)}
-                      {hasSummer && priceLine('Summer rental', summerPrice)}
-                      {hasWinter && priceLine('Winter rental', winterPrice)}
+                    {location && (
+                      <p className="text-sm text-slate-600">{location}</p>
+                    )}
+
+                    {/* Price chips */}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {hasAnnual && <PriceChip label="Yearly" value={y} tone="gold" />}
+                      {hasSummer && <PriceChip label="Summer" value={s} />}
+                      {hasWinter && <PriceChip label="Winter" value={w} />}
                       {!hasAnnual && !hasSummer && !hasWinter && (
-                        <p className="font-medium text-slate-400">Price on request</p>
+                        <span className="text-sm text-slate-400">Price on request</span>
                       )}
                     </div>
+
+                    {/* Icons + words (only if we have at least one value) */}
+                    {(typeof bedrooms === 'number' || typeof bathrooms === 'number') && (
+                      <div className="mt-2 flex items-center gap-6 text-sm text-slate-700">
+                        {typeof bedrooms === 'number' && (
+                          <span className="inline-flex items-center gap-2">
+                            {/* bed icon */}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path d="M3 7h18M6 7v7m12-7v7M3 14h18v3H3z" strokeWidth="1.5" />
+                            </svg>
+                            <span className="whitespace-nowrap">{bedrooms} bedrooms</span>
+                          </span>
+                        )}
+                        {typeof bathrooms === 'number' && (
+                          <span className="inline-flex items-center gap-2">
+                            {/* bath icon */}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path d="M7 10V6a2 2 0 1 1 4 0v4m7 0H4v5a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-5Z" strokeWidth="1.5" />
+                            </svg>
+                            <span className="whitespace-nowrap">{bathrooms} bathrooms</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               );
 
               return (
                 <div
-                  key={slug || v.title}
+                  key={slug || title}
                   className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
                 >
                   {href ? <Link href={href} className="block">{CardInner}</Link> : CardInner}
