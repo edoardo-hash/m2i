@@ -50,8 +50,6 @@ const deepFindNumber = (
 ): number | undefined => {
   if (node == null) return undefined;
 
-  // If it's directly a number-like, accept when parent key matched
-  // (handled by caller). Here we only traverse.
   if (Array.isArray(node)) {
     for (const item of node) {
       const n = deepFindNumber(item, keyCheck);
@@ -65,7 +63,6 @@ const deepFindNumber = (
       const lowerK = k.toLowerCase();
 
       if (keyCheck(lowerK)) {
-        // extract numeric value from this field
         const n =
           typeof v === 'number'
             ? v
@@ -94,9 +91,8 @@ const parseFromDescription = (v: any, type: 'bed' | 'bath'): number | undefined 
   return m ? Number(m[1]) : undefined;
 };
 
-/* ---------- bedroom/bathroom resolvers (flat keys -> deep -> description) ---------- */
+/* ---------- bedroom/bathroom resolvers ---------- */
 
-// flat/common keys first (fast path)
 const getBedroomsFlat = (v: any) =>
   readNumber(v, [
     'bedrooms',
@@ -127,7 +123,6 @@ const getBathroomsFlat = (v: any) =>
     'toilets',
   ]);
 
-// deep search (matches keys containing "bed" or "bath" but avoids false positives like "bedsize")
 const getBedroomsDeep = (v: any) =>
   deepFindNumber(v, (key) =>
     /bed(room)?s?$/.test(key) ||
@@ -148,27 +143,57 @@ const getBathroomsDeep = (v: any) =>
     key === 'toilets'
   );
 
-// final exported resolvers used by the card
 const getBedrooms = (v: any) =>
   getBedroomsFlat(v) ?? getBedroomsDeep(v) ?? parseFromDescription(v, 'bed');
 
 const getBathrooms = (v: any) =>
   getBathroomsFlat(v) ?? getBathroomsDeep(v) ?? parseFromDescription(v, 'bath');
 
+/* ---------- PRICE RESOLVERS (match the villa page, then convert to /month) ---------- */
 
-/* ---------- price resolvers per rental type ---------- */
+const toNum = (x: unknown) =>
+  typeof x === 'string' ? Number(x.replace(/[^\d.]/g, '')) : typeof x === 'number' ? x : NaN;
 
-const priceYearly = (v: Villa) =>
-  readNumber(v, ['price_yearly', 'yearly', 'yearly_price', 'annual']) ??
-  (monthlyFromVilla as any)?.(v, 'yearly');
+const pickFirstNumber = (...vals: unknown[]) => {
+  const n = vals.map(toNum).find((x) => Number.isFinite(x) && (x as number) > 0);
+  return Number.isFinite(n as number) ? (n as number) : undefined;
+};
 
-const priceSummer = (v: Villa) =>
-  readNumber(v, ['price_summer', 'summer', 'summer_price']) ??
-  (monthlyFromVilla as any)?.(v, 'summer');
+// total -> monthly converters (fallback to monthlyFromVilla if no total available)
+const priceYearly = (v: Villa) => {
+  const annualTotal = pickFirstNumber(
+    v?.meta?.prices?.annual,
+    v?.priceAnnual,
+    v?.yearly,
+    v?.price?.annual,
+    v?.pricing?.annual,
+    v?.rent?.annual
+  );
+  if (typeof annualTotal === 'number') return Math.round(annualTotal / 12);
+  return (monthlyFromVilla as any)?.(v, 'yearly');
+};
 
-const priceWinter = (v: Villa) =>
-  readNumber(v, ['price_winter', 'winter', 'winter_price']) ??
-  (monthlyFromVilla as any)?.(v, 'winter');
+const priceSummer = (v: Villa) => {
+  const summerTotal = pickFirstNumber(
+    v?.meta?.prices?.summer,
+    v?.price?.summer,
+    v?.pricing?.summer,
+    v?.rent?.summer
+  );
+  if (typeof summerTotal === 'number') return Math.round(summerTotal / 6);
+  return (monthlyFromVilla as any)?.(v, 'summer');
+};
+
+const priceWinter = (v: Villa) => {
+  const winterTotal = pickFirstNumber(
+    v?.meta?.prices?.winter,
+    v?.price?.winter,
+    v?.pricing?.winter,
+    v?.rent?.winter
+  );
+  if (typeof winterTotal === 'number') return Math.round(winterTotal / 6);
+  return (monthlyFromVilla as any)?.(v, 'winter');
+};
 
 /* ---------- component ---------- */
 
@@ -200,7 +225,7 @@ export default function Home() {
     return () => clearTimeout(id);
   }, [budgetRaw]);
 
-  // Locations for dropdown — only show locations that have at least one villa within the active filters
+  // Locations for dropdown — filtered by active filters
   const availableLocations = useMemo(() => {
     const pool = Array.isArray(villas) ? villas : [];
     const validLocations = new Set<string>();
@@ -427,6 +452,7 @@ export default function Home() {
               const href = slug ? `/v/${slug}` : undefined;
               const { hasWinter, hasSummer, hasAnnual } = availability(v);
 
+              // prices (per month, pulled like the villa page)
               const y = priceYearly(v);
               const s = priceSummer(v);
               const w = priceWinter(v);
@@ -480,7 +506,6 @@ export default function Home() {
                       <div className="mt-2 flex items-center gap-6 text-sm text-slate-700">
                         {typeof bedrooms === 'number' && (
                           <span className="inline-flex items-center gap-2">
-                            {/* bed icon */}
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                               <path d="M3 7h18M6 7v7m12-7v7M3 14h18v3H3z" strokeWidth="1.5" />
                             </svg>
@@ -489,7 +514,6 @@ export default function Home() {
                         )}
                         {typeof bathrooms === 'number' && (
                           <span className="inline-flex items-center gap-2">
-                            {/* bath icon */}
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                               <path d="M7 10V6a2 2 0 1 1 4 0v4m7 0H4v5a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-5Z" strokeWidth="1.5" />
                             </svg>
