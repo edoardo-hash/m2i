@@ -1,6 +1,7 @@
 // pages/v/[slug].tsx
 "use client";
 
+import WhatsAppButton from "../../components/WhatsAppButton";
 import Head from "next/head";
 import Image from "next/image";
 import { useRouter } from "next/router";
@@ -164,6 +165,13 @@ export default function VillaPage() {
   useEffect(() => setIdx(0), [slug]);
 
   const title = villa?.title || "Villa";
+// Store villa name globally for WhatsApp button
+useEffect(() => {
+  if (villa?.title) {
+    window.localStorage.setItem("m2i_villaName", villa.title);
+  }
+}, [villa?.title]);
+
   const where = villa?.location || villa?.city || villa?.destination || "Ibiza";
   const bedrooms = villa?.meta?.bedrooms ?? "—";
   const bathrooms = villa?.meta?.bathrooms ?? "—";
@@ -574,9 +582,11 @@ export default function VillaPage() {
         </div>
       </footer>
 
-      {/* Lightbox */}
-      <Lightbox images={images} isOpen={lbOpen} startIndex={lbStart} onClose={() => setLbOpen(false)} />
+  {/* Lightbox */}
+<Lightbox images={images} isOpen={lbOpen} startIndex={lbStart} onClose={() => setLbOpen(false)} />
 
+{/* WhatsApp Floating Button */}
+<WhatsAppButton />
       {/* Ken Burns keyframes (scoped) */}
       <style jsx global>{`
         @keyframes m2i-kenburns {
