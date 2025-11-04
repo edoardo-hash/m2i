@@ -1,4 +1,3 @@
-// pages/v/[slug].tsx
 "use client";
 
 import WhatsAppButton from "../../components/WhatsAppButton";
@@ -18,20 +17,22 @@ type Amenity = string | { name?: string; label?: string; group?: string; categor
 
 type Villa = {
   slug?: string;
-  title?: string;
-  location?: string;
-  city?: string;
-  destination?: string;
-  description?: string;
+  title?: any;
+  location?: any;
+  city?: any;
+  destination?: any;
+  description?: any;
+  bp_profile?: any; // might be nested/renamed; we’ll also deep-scan
   mapQuery?: string;
   cover?: string;
   images?: Photo[];
   photos?: Photo[];
   gallery?: Photo[];
+  amenities?: Amenity[];
   meta?: {
     bedrooms?: number | string;
     bathrooms?: number | string;
-    guests?: number | string; // compatibility
+    guests?: number | string;
     prices?: Prices;
   };
   price?: Prices;
@@ -48,12 +49,21 @@ const toNum = (x: unknown) =>
 const eur = (n: number) =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
+// normalize any API value to a clean string
+const asText = (val: any): string =>
+  Array.isArray(val)
+    ? val.map((x) => (x?.toString?.() ?? "")).join(" ").trim()
+    : typeof val === "string"
+    ? val.trim()
+    : val?.toString?.() ?? "";
+
+// hero price line
 function priceLine(v: Villa | null): string | undefined {
   if (!v) return;
   const pick = (...vals: unknown[]) => {
     const n = vals.map(toNum).find((x) => Number.isFinite(x) && (x as number) > 0);
     return Number.isFinite(n as number) ? (n as number) : undefined;
-  };
+    };
   const winter = pick(v.meta?.prices?.winter, v.price?.winter, v.pricing?.winter, v.rent?.winter);
   const summer = pick(v.meta?.prices?.summer, v.price?.summer, v.pricing?.summer, v.rent?.summer);
   const annual = pick(v.meta?.prices?.annual, v.priceAnnual, v.yearly, v.price?.annual, v.pricing?.annual, v.rent?.annual);
@@ -76,7 +86,6 @@ function collectImages(v: Villa | null): string[] {
   return Array.from(new Set(list));
 }
 
-// tiny neutral blur placeholder
 const BLUR =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAQAICRAEAOw==";
 
@@ -84,30 +93,22 @@ const BLUR =
 const norm = (s?: string) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const GROUPS_TO_HIDE = new Set<string>(["special features", "suitable for"]);
 const LABELS_TO_HIDE = new Set<string>([
-  // Special features (hide all)
   "boat usage","breakfast chef","butler","car usage","chef","driver",
   "eco tax on arrival 2.20€ per day per adult over 15","helicopter pad",
   "hire car recommended","house manager","live in staff","own water",
   "pets allowed","solar electricity","staff","waiter/waitress",
-
-  // Suitable for (hide all)
   "couples","events","families","filming","friends","honeymoon","retreats","weddings",
-
-  // Specific items (e.g. under Security)
-  "security guard","sunloungers","massage area","dj equipmemt","smart tv","tv - satellite","slightly inclined","neighbours"]);
-
+  "security guard","sunloungers","massage area","dj equipmemt","smart tv","tv - satellite","neighbours"
+]);
 const featureName = (a: Amenity) => (typeof a === "string" ? a : a?.name || a?.label || "");
 const featureGroup = (a: Amenity) => (typeof a === "string" ? "" : a?.group || a?.category || "");
-
 const filterFeatures = (items: Amenity[]) =>
   (items || []).filter((item) => {
     if (GROUPS_TO_HIDE.has(norm(featureGroup(item)))) return false;
     if (LABELS_TO_HIDE.has(norm(featureName(item)))) return false;
     return true;
   });
-/* --------------------------------------------------------- */
 
-// tiny check icon for feature chips
 const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
     <path
@@ -117,6 +118,52 @@ const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
     />
   </svg>
 );
+
+/* -------------------- TAGLINE HELPERS -------------------- */
+// recursively search any object/array for a key matching the regex and return a non-empty string
+function deepFindStringByKey(input: any, regex: RegExp, depth = 0): string | undefined {
+  if (!input || depth > 6) return;
+  if (typeof input === "string") return undefined;
+
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const got = deepFindStringByKey(item, regex, depth + 1);
+      if (got) return got;
+    }
+    return;
+  }
+
+  if (typeof input === "object") {
+    for (const [k, v] of Object.entries(input)) {
+      if (regex.test(k)) {
+        const s = asText(v);
+        if (s && s !== "null" && s !== "undefined") return s;
+      }
+      const got = deepFindStringByKey(v, regex, depth + 1);
+      if (got) return got;
+    }
+  }
+  return;
+}
+
+// read bp_profile / tagline from *any* shape
+function readBP(anyObj?: any): string | undefined {
+  if (!anyObj) return;
+  // look for bp_profile / bpProfile / tagline anywhere
+  return deepFindStringByKey(anyObj, /bp.?_?profile|tagline/i);
+}
+
+// resolve final tagline
+function resolveTagline(bpProfile?: string, desc?: string, title?: string, where?: string) {
+  const clean = (s?: string) => (s || "").trim();
+  if (clean(bpProfile)) return clean(bpProfile)!;
+  if (clean(desc)) {
+    const first = clean(desc)!.split(/(?<=\.)\s/)[0] || clean(desc)!;
+    return first;
+  }
+  return `${title || "Villa"} — ${where || "Ibiza"}`;
+}
+/* -------------------------------------------------------- */
 
 // --- main page ---
 export default function VillaPage() {
@@ -132,26 +179,44 @@ export default function VillaPage() {
 
   const { style: headerStyle, light } = useHeaderFade(160);
 
-  // Fetch villa
+  // Fetch villa (deep-scan for tagline + backfill from list if needed)
   useEffect(() => {
     if (!slug) return;
     (async () => {
       try {
-        let v: Villa | null = null;
+        let v: any = null;
+
+        // single-villa endpoint
         const r1 = await fetch(`/api/invenio/villa?slug=${encodeURIComponent(slug)}`).catch(() => null);
         if (r1?.ok) {
           const d1 = await r1.json();
           v = (d1?.villa as Villa) || (d1 as Villa);
         }
-        if (!v) {
-          const r2 = await fetch("/api/invenio/villas");
+
+        // load list to backfill or find the villa
+        const r2 = await fetch("/api/invenio/villas").catch(() => null);
+        if (r2?.ok) {
           const d2 = await r2.json();
-          const list: Villa[] = d2?.villas || d2 || [];
-          v =
-            list.find((x) => x.slug === slug) ||
-            list.find((x) => (x.slug || "").includes(String(slug))) ||
-            (list.length ? list[0] : null);
+          const list: any[] = d2?.villas || d2 || [];
+
+          if (!v) {
+            v =
+              list.find((x: any) => x.slug === slug) ||
+              list.find((x: any) => (asText(x.slug) || "").includes(String(slug))) ||
+              (list.length ? list[0] : null);
+          }
+
+          // if v exists but no tagline, try to pull from matching list item
+          const currentTagline = readBP(v);
+          if (!currentTagline) {
+            const match =
+              list.find((x: any) => asText(x.slug) === asText(v?.slug)) ||
+              list.find((x: any) => asText(x.title) === asText(v?.title));
+            const bp = readBP(match);
+            if (bp) v = { ...v, bp_profile: bp }; // store canonical field for later reads
+          }
         }
+
         setVilla(v ?? null);
       } catch (e) {
         console.error(e);
@@ -164,22 +229,25 @@ export default function VillaPage() {
   const images = useMemo(() => collectImages(villa), [villa]);
   useEffect(() => setIdx(0), [slug]);
 
-  const title = villa?.title || "Villa";
-// Store villa name globally for WhatsApp button
-useEffect(() => {
-  if (villa?.title) {
-    window.localStorage.setItem("m2i_villaName", villa.title);
-  }
-}, [villa?.title]);
-
-  const where = villa?.location || villa?.city || villa?.destination || "Ibiza";
+  const title = asText(villa?.title) || "Villa";
+  const where = asText(villa?.location) || asText(villa?.city) || asText(villa?.destination) || "Ibiza";
   const bedrooms = villa?.meta?.bedrooms ?? "—";
   const bathrooms = villa?.meta?.bathrooms ?? "—";
   const prices = priceLine(villa);
   const lat = (villa as any)?.coords?.lat ?? (villa as any)?.lat ?? 38.984;
   const lng = (villa as any)?.coords?.lng ?? (villa as any)?.lng ?? 1.435;
 
-  // Filter + sort amenities
+  // expose villa name to WA button
+  useEffect(() => {
+    if (title) window.localStorage.setItem("m2i_villaName", title);
+  }, [title]);
+
+  // Tagline (deep-read)
+  const taglineRaw = readBP(villa);
+  const taglineFull = resolveTagline(asText(taglineRaw), asText(villa?.description), title, where);
+  const taglineIsTruncated = (taglineFull || "").length > 180;
+
+  // Amenities
   const amenities: Amenity[] = useMemo(() => {
     const raw = ((villa as any)?.amenities || []) as Amenity[];
     return filterFeatures(raw);
@@ -192,7 +260,7 @@ useEffect(() => {
     return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
   }, [amenities]);
 
-  // --- Deep link tabs (hash) ---
+  // tabs via hash
   const hashToTab = (h: string): typeof tab => {
     const key = h.replace("#", "").toLowerCase();
     if (key.startsWith("desc") || key === "") return "desc";
@@ -226,48 +294,31 @@ useEffect(() => {
   return (
     <>
       <Head>
-  <title>{title} — Move2Ibiza</title>
-  {images[0] && <meta property="og:image" content={images[0]} />}
-  {/* expose villa name to the WA button */}
-  <meta name="x-villa-name" content={title} />
-</Head>
+        <title>{`${title} — Move2Ibiza`}</title>
+        {images[0] && <meta property="og:image" content={images[0]} />}
+      </Head>
 
-      {/* Header with fade */}
+      {/* Header */}
       <header
         className="fixed top-0 inset-x-0 z-50 transition-[background-color] duration-150"
         style={headerStyle}
       >
         <div className="mx-auto max-w-7xl h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-end">
           <nav className={`flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
-            <a
-              href="/"
-              className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]"
-            >
-              Home
-            </a>
-            <a
-              href="/#about"
-              className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]"
-            >
-              About
-            </a>
-            <a
-              href="/#contact"
-              className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]"
-            >
-              Contact
-            </a>
+            <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Home</a>
+            <a href="/#about" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">About</a>
+            <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
           </nav>
         </div>
       </header>
 
-      {/* HERO (with soft Ken Burns) */}
+      {/* HERO */}
       <section className="relative">
         <div className="relative h-[60vh] sm:h-[70vh] md:h-[76vh] overflow-hidden">
           {images.length ? (
             <div className="absolute inset-0 kenburns">
               <Image
-                key={images[idx]} // ensures blur per swap
+                key={images[idx]}
                 src={images[idx]}
                 alt={title}
                 fill
@@ -358,7 +409,7 @@ useEffect(() => {
         )}
       </section>
 
-      {/* Prices pill */}
+      {/* Prices */}
       {prices && (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6">
           <div className="inline-flex items-center gap-3 rounded-full bg-white ring-1 ring-slate-200 px-4 py-2 shadow-sm">
@@ -368,25 +419,22 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Spec bar (guests removed) */}
-      <section className="bg-slate-900 text-white mt-8 sm:mt-10">
-        <div className="mx-auto max-w-7xl px-6 py-6 grid grid-cols-2 gap-6 text-center">
-          <div>
-            <div className="text-2xl font-semibold">{bedrooms}</div>
-            <div className="text-white/85">Bedrooms</div>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold">{bathrooms}</div>
-            <div className="text-white/85">Bathrooms</div>
-          </div>
-        </div>
-        <div className="h-[3px] w-full bg-[#C6A36C]" />
-      </section>
-
-      {/* Tabs (sticky + hash) */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-8">
-        <div className="sticky top-16 z-30 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-slate-200">
-          <div className="flex gap-6">
+      {/* Sticky tagline + tabs */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8">
+        <div className="sticky top-16 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-slate-200">
+          {taglineFull && (
+            <div className="mx-auto max-w-5xl px-4">
+              <p className="flex items-center justify-center gap-3 text-center text-[16px] sm:text-lg text-slate-700 py-3 leading-snug" title={taglineFull}>
+                <span aria-hidden className="hidden sm:inline text-[#C6A36C] text-2xl leading-none">“</span>
+                <span className="font-serif italic truncate sm:truncate-none sm:tagline-two-lines">
+                  {taglineFull}
+                </span>
+                <span aria-hidden className="hidden sm:inline text-[#C6A36C] text-2xl leading-none">”</span>
+              </p>
+            </div>
+          )}
+          <div className="h-[2px] bg-gradient-to-r from-transparent via-[#C6A36C] to-transparent opacity-80" />
+          <div className="flex gap-6 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 py-1 shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
             {[
               { id: "desc", label: "Description" },
               { id: "feat", label: "Features" },
@@ -397,7 +445,7 @@ useEffect(() => {
                 key={id}
                 onClick={() => setTab(id as any)}
                 aria-current={tab === id ? "page" : undefined}
-                className={`pb-3 -mb-px text-sm font-medium border-b-4 ${
+                className={`pb-3 -mb-px text-sm font-medium border-b-4 shrink-0 ${
                   tab === id ? "border-[#C6A36C] text-slate-900" : "border-transparent text-slate-600 hover:text-slate-800"
                 }`}
               >
@@ -409,13 +457,17 @@ useEffect(() => {
 
         {/* Panels */}
         <div className="py-6 grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Main */}
           <div className="lg:col-span-2 space-y-8">
             {tab === "desc" && (
               <section id="description" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-4 text-slate-900">Description</h2>
+                {taglineFull && taglineIsTruncated && (
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-amber-900">
+                    <p className="font-serif italic text-[15px] sm:text-base leading-relaxed">“{taglineFull}”</p>
+                  </div>
+                )}
                 <p className="text-slate-700 leading-relaxed whitespace-pre-line">
-                  {villa?.description || "Details coming soon."}
+                  {asText(villa?.description) || "Details coming soon."}
                 </p>
               </section>
             )}
@@ -423,14 +475,10 @@ useEffect(() => {
             {tab === "feat" && (
               <section id="features" className="rounded-2xl border border-slate-200 bg-white/90 backdrop-blur p-6 shadow-sm">
                 <h2 className="font-serif text-xl font-semibold mb-1 text-slate-900">Features</h2>
-                <p className="text-sm text-slate-500 mb-4"></p>
-                <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                   {displayedFeatures.length ? (
                     displayedFeatures.map((label, i) => (
-                      <li
-                        key={i}
-                        className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow transition-shadow"
-                      >
+                      <li key={i} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow transition-shadow">
                         <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
                           <CheckIcon className="h-4 w-4" />
                         </span>
@@ -459,10 +507,7 @@ useEffect(() => {
                     {images.map((g, i) => (
                       <button
                         key={i}
-                        onClick={() => {
-                          setLbStart(i);
-                          setLbOpen(true);
-                        }}
+                        onClick={() => { setLbStart(i); setLbOpen(true); }}
                         className="relative aspect-[4/3] overflow-hidden ring-1 ring-slate-200 rounded-xl focus:outline-none"
                         aria-label={`Open image ${i + 1}`}
                       >
@@ -486,30 +531,22 @@ useEffect(() => {
             )}
           </div>
 
-          {/* Sidebar (CONTACT — same as homepage) */}
+          {/* Sidebar */}
           <aside className="md:sticky md:top-[120px]">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
               <h2 className="font-serif text-2xl font-semibold text-slate-900">Contact us</h2>
-
               <p className="mt-3 text-slate-600 leading-relaxed">
                 <strong>Moving to Ibiza begins with a conversation.</strong>
                 <br />
                 Whether you’re searching for a villa, an apartment, or simply exploring your options,
                 our team is here to guide you. We value privacy, clarity, and personal attention — every
                 enquiry is handled with care and discretion.
-                <br />
-                <br />
+                <br /><br />
                 Let’s find your place in Ibiza.
                 <br />
-                📧{" "}
-                <a href="mailto:M2Ibiza@inveniohomes.com" className="underline">
-                  M2Ibiza@inveniohomes.com
-                </a>
+                📧 <a href="mailto:M2Ibiza@inveniohomes.com" className="underline">M2Ibiza@inveniohomes.com</a>
                 <br />
-                📞{" "}
-                <a href="tel:+34671349592" className="underline">
-                  +34 671 349 592
-                </a>
+                📞 <a href="tel:+34671349592" className="underline">+34 671 349 592</a>
               </p>
 
               <form
@@ -530,45 +567,18 @@ useEffect(() => {
                     phone ? `Phone: ${phone}` : "",
                     "",
                     message,
-                  ]
-                    .filter(Boolean)
-                    .join("\n");
+                  ].filter(Boolean).join("\n");
 
                   window.open(
                     `mailto:M2Ibiza@inveniohomes.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
                   );
                 }}
               >
-                <input
-                  name="name"
-                  placeholder="Name"
-                  className="rounded-xl border border-slate-200 px-4 py-3"
-                  required
-                />
-                <input
-                  name="email"
-                  type="email"
-                  placeholder="Email"
-                  className="rounded-xl border border-slate-200 px-4 py-3"
-                  required
-                />
-                <input
-                  name="phone"
-                  placeholder="Phone / WhatsApp"
-                  className="rounded-xl border border-slate-200 px-4 py-3"
-                />
-                <textarea
-                  name="message"
-                  rows={5}
-                  placeholder="Message"
-                  className="rounded-xl border border-slate-200 px-4 py-3"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="mt-2 w-full rounded-full px-5 py-3 font-semibold"
-                  style={{ background: "#C6A36C", color: "#1f2937" }}
-                >
+                <input name="name" placeholder="Name" className="rounded-xl border border-slate-200 px-4 py-3" required />
+                <input name="email" type="email" placeholder="Email" className="rounded-xl border border-slate-200 px-4 py-3" required />
+                <input name="phone" placeholder="Phone / WhatsApp" className="rounded-xl border border-slate-200 px-4 py-3" />
+                <textarea name="message" rows={5} placeholder="Message" className="rounded-xl border border-slate-200 px-4 py-3" required />
+                <button type="submit" className="mt-2 w-full rounded-full px-5 py-3 font-semibold" style={{ background: "#C6A36C", color: "#1f2937" }}>
                   Send inquiry
                 </button>
               </form>
@@ -577,29 +587,19 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="bg-slate-900 text-white mt-10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 text-center text-white/80 text-sm">
           © {new Date().getFullYear()} Move2Ibiza — Powered by Invenio Homes
         </div>
       </footer>
 
-  {/* Lightbox */}
-<Lightbox images={images} isOpen={lbOpen} startIndex={lbStart} onClose={() => setLbOpen(false)} />
+      <Lightbox images={images} isOpen={lbOpen} startIndex={lbStart} onClose={() => setLbOpen(false)} />
+      <WhatsAppButton />
 
-{/* WhatsApp Floating Button */}
-<WhatsAppButton />
-      {/* Ken Burns keyframes (scoped) */}
       <style jsx global>{`
-        @keyframes m2i-kenburns {
-          0% { transform: scale(1.0); }
-          100% { transform: scale(1.05); }
-        }
-        .kenburns {
-          animation: m2i-kenburns 25s ease-in-out infinite alternate;
-          transform-origin: center center;
-          will-change: transform;
-        }
+        @keyframes m2i-kenburns { 0% { transform: scale(1); } 100% { transform: scale(1.05); } }
+        .kenburns { animation: m2i-kenburns 25s ease-in-out infinite alternate; transform-origin: center; }
+        .tagline-two-lines { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       `}</style>
     </>
   );
