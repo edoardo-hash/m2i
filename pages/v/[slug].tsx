@@ -178,17 +178,26 @@ export default function VillaPage() {
         className="fixed top-0 inset-x-0 z-50 transition-[background-color] duration-150"
         style={headerStyle}
       >
-        <div className="mx-auto max-w-7xl h-14 sm:h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2" aria-label="Move2Ibiza home">
-            <img src="/m2i-logo.png" alt="Move2Ibiza logo" className="h-9 w-auto" />
-            <span className={`${light ? "text-white" : "text-slate-900"} font-semibold tracking-wide text-sm sm:text-base`}>
-              Move2Ibiza
-            </span>
-          </a>
-          <nav className={`hidden sm:flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
-            <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Start your search</a>
-            <a href="/#featured" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Featured</a>
-            <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
+        <div className="mx-auto max-w-7xl h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-end">
+          <nav className={`flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
+            <a
+              href="/"
+              className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]"
+            >
+              Explore
+            </a>
+            <a
+              href="/#about"
+              className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]"
+            >
+              About
+            </a>
+            <a
+              href="/#contact"
+              className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]"
+            >
+              Contact
+            </a>
           </nav>
         </div>
       </header>
@@ -254,42 +263,41 @@ export default function VillaPage() {
           </div>
         )}
 
-{/* thumbnails */}
-{images.length > 1 && (
-  <div className="relative -mt-8 sm:-mt-10">
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      {/* make only this area horizontally scrollable */}
-      <div className="overflow-x-auto no-scrollbar">
-        <div className="flex gap-2 rounded-2xl bg-white/90 backdrop-blur-sm ring-1 ring-slate-200 p-2 shadow-xl w-max">
-          {images.slice(0, 40).map((src, i) => (
-            <button
-              key={i}
-              onClick={() => setIdx(i)}
-              aria-label={`View image ${i + 1}`}
-              className={`relative h-16 w-24 flex-none overflow-hidden rounded-md transition-all ${
-                i === idx
-                  ? "ring-4 ring-[#C6A36C] shadow-[0_0_0_4px_rgba(198,163,108,0.35)]"
-                  : "ring-1 ring-slate-200 hover:ring-slate-300"
-              }`}
-            >
-              <Image
-                src={src}
-                alt=""
-                fill
-                unoptimized
-                placeholder="blur"
-                blurDataURL={BLUR}
-                sizes="192px"
-                className="object-cover"
-              />
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
+        {/* thumbnails */}
+        {images.length > 1 && (
+          <div className="relative -mt-8 sm:-mt-10">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              {/* make only this area horizontally scrollable */}
+              <div className="overflow-x-auto no-scrollbar">
+                <div className="flex gap-2 rounded-2xl bg-white/90 backdrop-blur-sm ring-1 ring-slate-200 p-2 shadow-xl w-max">
+                  {images.slice(0, 40).map((src, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setIdx(i)}
+                      aria-label={`View image ${i + 1}`}
+                      className={`relative h-16 w-24 flex-none overflow-hidden rounded-md transition-all ${
+                        i === idx
+                          ? "ring-4 ring-[#C6A36C] shadow-[0_0_0_4px_rgba(198,163,108,0.35)]"
+                          : "ring-1 ring-slate-200 hover:ring-slate-300"
+                      }`}
+                    >
+                      <Image
+                        src={src}
+                        alt=""
+                        fill
+                        unoptimized
+                        placeholder="blur"
+                        blurDataURL={BLUR}
+                        sizes="192px"
+                        className="object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Prices pill */}
@@ -409,17 +417,34 @@ export default function VillaPage() {
             )}
           </div>
 
-          {/* Sidebar (CTA) */}
+          {/* Sidebar (CONTACT — same as homepage) */}
           <aside className="md:sticky md:top-[120px]">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-              <div className="text-sm text-slate-600">From</div>
-              <div className="text-3xl font-semibold text-slate-900">
-                {villa?.meta?.prices?.monthly || "Contact us"}
-              </div>
-              <div className="text-xs text-slate-500 mt-1">Minimum 1 month · Deposit applies</div>
+              <h2 className="font-serif text-2xl font-semibold text-slate-900">Contact us</h2>
+
+              <p className="mt-3 text-slate-600 leading-relaxed">
+                <strong>Moving to Ibiza begins with a conversation.</strong>
+                <br />
+                Whether you’re searching for a villa, an apartment, or simply exploring your options,
+                our team is here to guide you. We value privacy, clarity, and personal attention — every
+                enquiry is handled with care and discretion.
+                <br />
+                <br />
+                Let’s find your place in Ibiza.
+                <br />
+                📧{" "}
+                <a href="mailto:M2Ibiza@inveniohomes.com" className="underline">
+                  M2Ibiza@inveniohomes.com
+                </a>
+                <br />
+                📞{" "}
+                <a href="tel:+34671349592" className="underline">
+                  +34 671 349 592
+                </a>
+              </p>
 
               <form
-                className="mt-5 grid gap-3"
+                className="mt-6 grid grid-cols-1 gap-3"
                 onSubmit={(e) => {
                   e.preventDefault();
                   const name = (e.currentTarget.elements.namedItem("name") as HTMLInputElement)?.value;
@@ -441,20 +466,41 @@ export default function VillaPage() {
                     .join("\n");
 
                   window.open(
-                    `mailto:hello@move2ibiza.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                    `mailto:M2Ibiza@inveniohomes.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
                   );
                 }}
               >
-                <input name="name" type="text" placeholder="Your name" className="px-4 py-3 rounded-xl border border-slate-300" required />
-                <input name="email" type="email" placeholder="Email" className="px-4 py-3 rounded-xl border border-slate-300" required />
-                <input name="phone" type="text" placeholder="Phone / WhatsApp" className="px-4 py-3 rounded-xl border border-slate-300" />
-                <textarea name="message" placeholder="Message" rows={4} className="px-4 py-3 rounded-xl border border-slate-300" required />
+                <input
+                  name="name"
+                  placeholder="Name"
+                  className="rounded-xl border border-slate-200 px-4 py-3"
+                  required
+                />
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="Email"
+                  className="rounded-xl border border-slate-200 px-4 py-3"
+                  required
+                />
+                <input
+                  name="phone"
+                  placeholder="Phone / WhatsApp"
+                  className="rounded-xl border border-slate-200 px-4 py-3"
+                />
+                <textarea
+                  name="message"
+                  rows={5}
+                  placeholder="Message"
+                  className="rounded-xl border border-slate-200 px-4 py-3"
+                  required
+                />
                 <button
                   type="submit"
-                  className="px-4 py-3 rounded-full font-semibold hover:opacity-95 transition"
+                  className="mt-2 w-full rounded-full px-5 py-3 font-semibold"
                   style={{ background: "#C6A36C", color: "#1f2937" }}
                 >
-                  Request Availability
+                  Send inquiry
                 </button>
               </form>
             </div>
