@@ -1,45 +1,41 @@
 // components/WhatsAppButton.tsx
 "use client";
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FaWhatsapp } from "react-icons/fa";
 
 export default function WhatsAppButton() {
   const pathname = usePathname();
-  const [villaName, setVillaName] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!pathname) return; // guard for null
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    // We’ll compute the message at click-time to avoid stale values
+    const isVillaPage = !!pathname && pathname.startsWith("/v/");
+    let message: string;
 
-    // When on a villa page, grab stored villa name
-    if (pathname.startsWith("/v/")) {
-      const stored =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem("m2i_villaName")
-          : null;
-      setVillaName(stored);
+    if (isVillaPage && typeof document !== "undefined" && typeof window !== "undefined") {
+      // Prefer meta tag, then fall back to document.title prefix
+      const meta = document.querySelector('meta[name="x-villa-name"]') as HTMLMetaElement | null;
+      const titleFromMeta = meta?.content?.trim();
+      const titleFromDoc = (document.title || "").split(" — ")[0].trim();
+      const villaName = titleFromMeta || titleFromDoc || "this property";
+      const url = window.location.href;
+
+      message = `Hi! I'd like to know more about ${villaName}. Here is the link: ${url}`;
     } else {
-      setVillaName(null);
+      message = "Hi! I'm interested in renting a property in Ibiza.";
     }
-  }, [pathname]);
 
-  const isVillaPage = pathname?.startsWith("/v/");
-  const currentUrl =
-    typeof window !== "undefined" ? window.location.href : "https://m2i-qjvb.vercel.app/";
+    const whatsappURL = `https://wa.me/34671349592?text=${encodeURIComponent(message)}`;
 
-  // --- message builder ---
-  let message = "";
-  if (isVillaPage && villaName) {
-    message = `Hi! I'd like to know more about ${villaName}. Here is the link: ${currentUrl}`;
-  } else {
-    message = "Hi! I'm interested in renting a property in Ibiza.";
-  }
+    // navigate with fresh message
+    e.preventDefault();
+    window.open(whatsappURL, "_blank", "noopener,noreferrer");
+  };
 
-  const whatsappURL = `https://wa.me/34671349592?text=${encodeURIComponent(message)}`;
-
+  // href is a fallback; real URL is built on click
   return (
     <a
-      href={whatsappURL}
+      href="https://wa.me/34671349592"
+      onClick={handleClick}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat on WhatsApp"

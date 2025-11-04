@@ -226,9 +226,11 @@ useEffect(() => {
   return (
     <>
       <Head>
-        <title>{title} — Move2Ibiza</title>
-        {images[0] && <meta property="og:image" content={images[0]} />}
-      </Head>
+  <title>{title} — Move2Ibiza</title>
+  {images[0] && <meta property="og:image" content={images[0]} />}
+  {/* expose villa name to the WA button */}
+  <meta name="x-villa-name" content={title} />
+</Head>
 
       {/* Header with fade */}
       <header
