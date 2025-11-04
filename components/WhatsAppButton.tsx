@@ -23,13 +23,17 @@ export default function WhatsAppButton() {
     }
   }, [pathname]);
 
-  // Build WhatsApp message
+  const isVillaPage = pathname?.startsWith("/v/");
   const currentUrl =
     typeof window !== "undefined" ? window.location.href : "https://m2i-qjvb.vercel.app/";
 
-  const message = villaName
-    ? `Hi! I'd like to know more about ${villaName}. Here is the link: ${currentUrl}`
-    : `Hi! I'm interested in renting a property in Ibiza.\n${currentUrl}`;
+  // --- message builder ---
+  let message = "";
+  if (isVillaPage && villaName) {
+    message = `Hi! I'd like to know more about ${villaName}. Here is the link: ${currentUrl}`;
+  } else {
+    message = "Hi! I'm interested in renting a property in Ibiza.";
+  }
 
   const whatsappURL = `https://wa.me/34671349592?text=${encodeURIComponent(message)}`;
 
