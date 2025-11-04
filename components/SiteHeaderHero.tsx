@@ -28,7 +28,7 @@ export default function SiteHeaderHero() {
             href="/#search"
             className="hover:underline underline-offset-4 decoration-[#C6A36C]"
           >
-            Explore
+            Home
           </a>
           <a
             href="/#about"
