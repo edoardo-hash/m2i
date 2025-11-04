@@ -380,14 +380,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Floating contact button */}
-      <a
-        href="#contact"
-        className="fixed left-4 bottom-4 z-40 rounded-full bg-white/90 backdrop-blur px-4 py-2 text-slate-800 shadow ring-1 ring-black/10 hover:bg-white"
-      >
-        Contact
-      </a>
-
       {/* SEARCH + GRID */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12" id="grid">
         <form
