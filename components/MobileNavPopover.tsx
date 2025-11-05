@@ -1,131 +1,114 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
-type Item = { label: string; href: string; onClick?: () => void };
+type Item = { label: string; href: string };
 
 export default function MobileNavPopover({
-  items = [
-    { label: "Home", href: "/" },
-    { label: "About", href: "/#about" },
-    { label: "Contact", href: "/#contact" },
-  ],
-  phone = "+34 671 349 592",
-  email = "M2Ibiza@inveniohomes.com",
-  isScrolled = false,
+  items,
+  phone,
+  email,
 }: {
-  items?: Item[];
+  items: Item[];
   phone?: string;
   email?: string;
-  isScrolled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
-  // close on escape
+  // Close on outside click / ESC
   useEffect(() => {
-    if (!open) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (!open) return;
+      const t = e.target as Node;
+      if (popRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
-
-  const ItemRow = ({ item }: { item: Item }) => (
-    <Link
-      href={item.href}
-      onClick={() => {
-        setOpen(false);
-        item.onClick?.();
-      }}
-      className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 active:opacity-80"
-    >
-      <span className="text-[16px] text-slate-800 font-medium">{item.label}</span>
-      <span className="text-slate-300 text-lg">›</span>
-    </Link>
-  );
 
   return (
     <>
-      {/* Trigger */}
       <button
-        aria-label="Menu"
-        onClick={() => setOpen(true)}
-        className={`h-9 w-9 grid place-items-center rounded-full ring-1 ring-slate-300 shadow-sm active:scale-[0.98] transition-all duration-300 ${
-          isScrolled ? "bg-white text-slate-800" : "bg-white/20 text-white"
-        }`}
+        ref={btnRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex size-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow ring-1 ring-black/10"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="5" cy="12" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="19" cy="12" r="2" />
+        <span className="sr-only">Menu</span>
+        <svg viewBox="0 0 16 16" className="h-5 w-5" aria-hidden="true">
+          <circle cx="2.5" cy="8" r="1.6" />
+          <circle cx="8" cy="8" r="1.6" />
+          <circle cx="13.5" cy="8" r="1.6" />
         </svg>
       </button>
 
-      {/* Bottom sheet portal */}
-      {mounted &&
-        open &&
-        createPortal(
-          <>
-            <div
-              className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-[1px]"
-              onClick={() => setOpen(false)}
-            />
-            <div className="fixed bottom-0 inset-x-0 z-[9999] animate-slideUp">
-              <div className="mx-auto w-full max-w-md rounded-t-3xl bg-white shadow-2xl ring-1 ring-slate-200 p-4">
-                {/* drag handle */}
-                <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200" />
-                <div className="space-y-3">
-                  {items.map((item) => (
-                    <ItemRow key={item.href} item={item} />
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  <a
-                    href={`tel:${phone.replace(/\s+/g, "")}`}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-[15px] text-slate-800 font-medium active:opacity-80"
+      {open && (
+        <div
+          ref={popRef}
+          role="menu"
+          aria-label="Mobile navigation"
+          className="absolute right-0 mt-2 w-[88vw] max-w-sm origin-top-right rounded-3xl bg-white/95 p-3 shadow-xl ring-1 ring-black/10 backdrop-blur"
+          style={{ top: "calc(100% + 10px)" }} // ensure it opens BELOW the button
+        >
+          <div className="space-y-3">
+            {items.map((it) => (
+              <a
+                key={it.href}
+                href={it.href}
+                onClick={() => setOpen(false)}
+                className="block rounded-2xl border border-slate-200 px-5 py-4 text-base font-medium text-slate-900 hover:bg-slate-50"
+              >
+                <span className="flex items-center justify-between">
+                  {it.label}
+                  <svg
+                    viewBox="0 0 20 20"
+                    className="h-4 w-4 text-slate-400"
+                    aria-hidden="true"
                   >
-                    Call
-                  </a>
-                  <a
-                    href={`mailto:${email}`}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-[15px] text-slate-800 font-medium active:opacity-80"
-                  >
-                    Email
-                  </a>
-                </div>
+                    <path
+                      fill="currentColor"
+                      d="M7 15l5-5-5-5"
+                    />
+                  </svg>
+                </span>
+              </a>
+            ))}
 
-                <button
+            <div className="grid grid-cols-2 gap-3">
+              {phone && (
+                <a
+                  href={`tel:${phone.replace(/\s+/g, "")}`}
+                  className="rounded-2xl border border-slate-200 px-5 py-4 text-center font-medium text-slate-900 hover:bg-slate-50"
                   onClick={() => setOpen(false)}
-                  className="mt-4 w-full rounded-xl bg-[#0B1120] py-3 text-white text-[15px] font-medium shadow-sm active:opacity-90"
                 >
-                  Close
-                </button>
-              </div>
+                  Call
+                </a>
+              )}
+              {email && (
+                <a
+                  href={`mailto:${email}`}
+                  className="rounded-2xl border border-slate-200 px-5 py-4 text-center font-medium text-slate-900 hover:bg-slate-50"
+                  onClick={() => setOpen(false)}
+                >
+                  Email
+                </a>
+              )}
             </div>
-
-            {/* slide-up animation */}
-            <style jsx>{`
-              @keyframes slideUp {
-                from {
-                  transform: translateY(100%);
-                  opacity: 0;
-                }
-                to {
-                  transform: translateY(0);
-                  opacity: 1;
-                }
-              }
-              .animate-slideUp {
-                animation: slideUp 0.25s ease-out forwards;
-              }
-            `}</style>
-          </>,
-          document.body
-        )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
