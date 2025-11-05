@@ -597,6 +597,13 @@ export default function Home() {
             Send inquiry
           </button>
         </form>
+{/* ✅ GDPR consent note */}
+<p className="mt-3 text-xs text-slate-500 sm:col-span-2">
+  By submitting this form you agree to our{" "}
+  <a href="/privacy" className="underline hover:text-slate-700">
+    Privacy Policy
+  </a>.
+</p>
       </section>
     </>
   );

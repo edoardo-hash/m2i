@@ -1,0 +1,23 @@
+I’ll need access to all the credentials and setup information for our WhatsApp Business API (via 360dialog or Twilio, depending on which one we’re using).
+
+Could you please share the following details:
+
+API Provider — confirm whether we’re using 360dialog or Twilio.
+
+API Base URL (e.g. https://waba.360dialog.io or Twilio endpoint).
+
+WhatsApp Business Account ID
+
+Phone Number ID and the connected WhatsApp number
+
+Permanent Access Token / API Key (with send-message and webhook permissions)
+
+Verify Token (for webhook verification handshake)
+
+Webhook URL currently registered (if any) — and confirm whether I can change or add one for testing.
+
+Test environment or sandbox phone number (if available).
+
+If you already have the Meta App or Twilio console access, please also add me (or share credentials securely) so I can view message templates, webhooks, and logs.
+
+Once I have these details, I’ll set up the webhook listener and start implementing the message flows (verification, calendar updates, and confirmations).
