@@ -1,6 +1,7 @@
 // pages/index.tsx
 'use client';
 
+import MobileNavSheet from "../components/MobileNavSheet";
 import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';

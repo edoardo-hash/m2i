@@ -1,5 +1,6 @@
 "use client";
 
+import MobileNavPopover from "../../components/MobileNavPopover";
 import WhatsAppButton from "../../components/WhatsAppButton";
 import Head from "next/head";
 import Image from "next/image";
@@ -304,11 +305,28 @@ export default function VillaPage() {
         style={headerStyle}
       >
         <div className="mx-auto max-w-7xl h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-end">
-          <nav className={`flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
-            <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Home</a>
-            <a href="/#about" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">About</a>
-            <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
-          </nav>
+       <nav className={`flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
+  {/* Desktop */}
+  <div className="hidden sm:flex items-center gap-6">
+    <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Home</a>
+    <a href="/#about" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">About</a>
+    <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
+  </div>
+
+  {/* Mobile bottom-sheet trigger */}
+<div className="relative sm:hidden">
+  <MobileNavPopover
+    isLight={light} // from useHeaderFade
+    items={[
+      { label: "Home", href: "/" },
+      { label: "About", href: "/#about" },
+      { label: "Contact", href: "/#contact" },
+    ]}
+    phone="+34 671 349 592"
+    email="M2Ibiza@inveniohomes.com"
+  />
+</div>
+</nav>
         </div>
       </header>
 
