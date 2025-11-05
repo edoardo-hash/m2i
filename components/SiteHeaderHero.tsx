@@ -32,16 +32,15 @@ export default function SiteHeaderHero() {
 
           {/* Mobile (popover anchored under the button) */}
           <div className="relative sm:hidden">
-            <MobileNavPopover
-              isLight={!isScrolled}
-              items={[
-                { label: "Home", href: "/" },
-                { label: "About", href: "/#about" },
-                { label: "Contact", href: "/#contact" },
-              ]}
-              phone="+34 671 349 592"
-              email="M2Ibiza@inveniohomes.com"
-            />
+           <MobileNavPopover
+  items={[
+    { label: "Home", href: "/" },
+    { label: "About", href: "/#about" },
+    { label: "Contact", href: "/#contact" },
+  ]}
+  phone="+34 671 349 592"
+  email="M2Ibiza@inveniohomes.com"
+/>
           </div>
         </nav>
       </div>
