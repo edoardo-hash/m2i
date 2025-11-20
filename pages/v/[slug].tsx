@@ -1,5 +1,6 @@
 "use client";
 
+import DownloadBrochureButton from "../../components/DownloadBrochureButton";
 import MobileNavPopover from "../../components/MobileNavPopover";
 import WhatsAppButton from "../../components/WhatsAppButton";
 import Head from "next/head";
@@ -64,7 +65,7 @@ function priceLine(v: Villa | null): string | undefined {
   const pick = (...vals: unknown[]) => {
     const n = vals.map(toNum).find((x) => Number.isFinite(x) && (x as number) > 0);
     return Number.isFinite(n as number) ? (n as number) : undefined;
-    };
+  };
   const winter = pick(v.meta?.prices?.winter, v.price?.winter, v.pricing?.winter, v.rent?.winter);
   const summer = pick(v.meta?.prices?.summer, v.price?.summer, v.pricing?.summer, v.rent?.summer);
   const annual = pick(v.meta?.prices?.annual, v.priceAnnual, v.yearly, v.price?.annual, v.pricing?.annual, v.rent?.annual);
@@ -121,7 +122,6 @@ const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 /* -------------------- TAGLINE HELPERS -------------------- */
-// recursively search any object/array for a key matching the regex and return a non-empty string
 function deepFindStringByKey(input: any, regex: RegExp, depth = 0): string | undefined {
   if (!input || depth > 6) return;
   if (typeof input === "string") return undefined;
@@ -147,14 +147,11 @@ function deepFindStringByKey(input: any, regex: RegExp, depth = 0): string | und
   return;
 }
 
-// read bp_profile / tagline from *any* shape
 function readBP(anyObj?: any): string | undefined {
   if (!anyObj) return;
-  // look for bp_profile / bpProfile / tagline anywhere
   return deepFindStringByKey(anyObj, /bp.?_?profile|tagline/i);
 }
 
-// resolve final tagline
 function resolveTagline(bpProfile?: string, desc?: string, title?: string, where?: string) {
   const clean = (s?: string) => (s || "").trim();
   if (clean(bpProfile)) return clean(bpProfile)!;
@@ -305,28 +302,28 @@ export default function VillaPage() {
         style={headerStyle}
       >
         <div className="mx-auto max-w-7xl h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-end">
-       <nav className={`flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
-  {/* Desktop */}
-  <div className="hidden sm:flex items-center gap-6">
-    <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Home</a>
-    <a href="/#about" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">About</a>
-    <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
-  </div>
+          <nav className={`flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
+            {/* Desktop */}
+            <div className="hidden sm:flex items-center gap-6">
+              <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Home</a>
+              <a href="/#about" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">About</a>
+              <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
+            </div>
 
-  {/* Mobile bottom-sheet trigger */}
-<div className="relative sm:hidden">
-  <MobileNavPopover
-    isLight={light} // from useHeaderFade
-    items={[
-      { label: "Home", href: "/" },
-      { label: "About", href: "/#about" },
-      { label: "Contact", href: "/#contact" },
-    ]}
-    phone="+34 671 349 592"
-    email="M2Ibiza@inveniohomes.com"
-  />
-</div>
-</nav>
+            {/* Mobile bottom-sheet trigger */}
+            <div className="relative sm:hidden">
+              <MobileNavPopover
+                isLight={light}
+                items={[
+                  { label: "Home", href: "/" },
+                  { label: "About", href: "/#about" },
+                  { label: "Contact", href: "/#contact" },
+                ]}
+                phone="+34 671 349 592"
+                email="M2Ibiza@inveniohomes.com"
+              />
+            </div>
+          </nav>
         </div>
       </header>
 
@@ -427,15 +424,25 @@ export default function VillaPage() {
         )}
       </section>
 
-      {/* Prices */}
-      {prices && (
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6">
-          <div className="inline-flex items-center gap-3 rounded-full bg-white ring-1 ring-slate-200 px-4 py-2 shadow-sm">
-            <span className="text-sm font-medium text-slate-600">Prices</span>
-            <span className="text-sm font-semibold text-slate-900">{prices}</span>
-          </div>
-        </div>
-      )}
+{prices && (
+  <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6">
+    <div className="flex items-center gap-3 flex-wrap">
+      <div className="inline-flex items-center gap-3 rounded-full bg-white ring-1 ring-slate-200 px-4 py-2 shadow-sm">
+        <span className="text-sm font-medium text-slate-600">Prices</span>
+        <span className="text-sm font-semibold text-slate-900">{prices}</span>
+      </div>
+
+      {slug ? (
+        <DownloadBrochureButton
+          slug={slug}
+          className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold shadow
+                     Bg-white text-[#1f2937] hover:brightness-95 active:brightness-30
+                     ring-1 ring-black/5"
+        />
+      ) : null}
+    </div>
+  </div>
+)}
 
       {/* Sticky tagline + tabs */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8">
@@ -566,6 +573,13 @@ export default function VillaPage() {
                 <br />
                 📞 <a href="tel:+34671349592" className="underline">+34 671 349 592</a>
               </p>
+
+              {/* ---- White-label brochure button ---- */}
+              {slug ? (
+                <div className="mt-4">
+                  <DownloadBrochureButton slug={slug} />
+                </div>
+              ) : null}
 
               <form
                 className="mt-6 grid grid-cols-1 gap-3"
