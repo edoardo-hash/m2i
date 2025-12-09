@@ -27,7 +27,8 @@ type InvenioVilla = {
 async function fetchVillas(): Promise<InvenioVilla[]> {
   const apiKey = process.env.INVENIO_API_KEY;
   const partnerUuid = process.env.INVENIO_BP_UUID;
-  const baseUrl = process.env.INVENIO_API_BASE || "https://api.inveniohomes.com";
+  const baseUrl =
+    process.env.INVENIO_API_BASE || "https://api.inveniohomes.com";
 
   if (!apiKey || !partnerUuid) throw new Error("Missing Invenio credentials");
 
@@ -62,6 +63,13 @@ const filterFeatures = (features: string[] = []) =>
       "smart tv",
     ].some((bad) => lower.includes(bad));
   });
+
+const cleanText = (str: string | undefined | null) =>
+  (str || "")
+    .replace(/Ð/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
 
 export default async function handler(
   req: NextApiRequest,
@@ -98,7 +106,7 @@ export default async function handler(
   const gold = "#D4AF37";
 
   /* =========================================================
-   * COVER PAGE (your existing style)
+   * COVER PAGE
    * ======================================================= */
 
   if (villa.photos?.[0]) {
@@ -119,23 +127,55 @@ export default async function handler(
     }
   }
 
+  // TITLE – centered
   doc
     .fillColor("white")
     .font("Helvetica-Bold")
     .fontSize(52)
-    .text(villa.bp_name.toUpperCase(), 50, 280);
+    .text(villa.bp_name.toUpperCase(), 0, 230, {
+      width: 595,
+      align: "center",
+    });
 
-  if (villa.bp_profile) {
+  // GOLD DIVIDER under title
+  doc
+    .moveTo(160, 300)
+    .lineTo(435, 300)
+    .lineWidth(2)
+    .strokeColor(gold)
+    .stroke();
+
+  // BEDROOMS / BATHROOMS – centered
+  const coverSpecsParts: string[] = [];
+  if (villa.bedrooms) coverSpecsParts.push(`${villa.bedrooms} Bedrooms`);
+  if (villa.bathrooms) coverSpecsParts.push(`${villa.bathrooms} Bathrooms`);
+  const coverSpecs = coverSpecsParts.join("   •   ");
+
+  if (coverSpecs) {
     doc
-      .font("Helvetica-Oblique")
-      .fontSize(18)
+      .font("Helvetica")
+      .fontSize(20)
       .fillColor("white")
-      .text(`"${villa.bp_profile.trim()}"`, 50, 380, {
-        width: 495,
+      .text(coverSpecs, 0, 320, {
+        width: 595,
         align: "center",
       });
   }
 
+  // TAGLINE – centered
+  const tagline = cleanText(villa.bp_profile);
+  if (tagline) {
+    doc
+      .font("Helvetica-Oblique")
+      .fontSize(20)
+      .fillColor("white")
+      .text(`"${tagline}"`, 70, 380, {
+        width: 455,
+        align: "center",
+      });
+  }
+
+  // bottom gold line
   doc
     .moveTo(50, 720)
     .lineTo(545, 720)
@@ -168,8 +208,10 @@ export default async function handler(
   title("Villa Overview");
 
   let overview =
-    villa.description?.split("\n\n")[0] ||
+    villa.description ||
     "A refined Ibiza retreat offering privacy and luxury.";
+  overview = cleanText(overview);
+
   doc
     .font("Helvetica")
     .fontSize(12)
@@ -180,7 +222,6 @@ export default async function handler(
   const specs = [
     villa.bedrooms && `${villa.bedrooms} Bedrooms`,
     villa.bathrooms && `${villa.bathrooms} Bathrooms`,
-    villa.guests && `Sleeps ${villa.guests}`,
     villa.built_size && `${villa.built_size} m² Built`,
     villa.plot_size && `${villa.plot_size} m² Plot`,
   ]
@@ -215,13 +256,15 @@ export default async function handler(
   doc.addPage({ margin: 50 });
   title("Features & Amenities");
 
-  const clean = filterFeatures(villa.features || []);
-  const half = Math.ceil(clean.length / 2);
+  const cleanFeatures = filterFeatures(
+    (villa.features || []).map((f) => cleanText(f))
+  );
+  const half = Math.ceil(cleanFeatures.length / 2);
   const startY = doc.y;
 
   doc.fontSize(11).fillColor("#333").lineGap(6);
-  clean.slice(0, half).forEach((f) => doc.text(`• ${f}`, 50, doc.y));
-  clean.slice(half).forEach((f, i) =>
+  cleanFeatures.slice(0, half).forEach((f) => doc.text(`• ${f}`, 50, doc.y));
+  cleanFeatures.slice(half).forEach((f, i) =>
     doc.text(`• ${f}`, 300, startY + i * 18)
   );
 
@@ -261,10 +304,9 @@ export default async function handler(
   }
 
   /* =========================================================
-   * MAP PAGE (Mapbox) - NEW
+   * MAP PAGE (Mapbox) – improved
    * ======================================================= */
 
-  // compute coordinates from gps or bp_lat/bp_lng
   let lat: number | null = null;
   let lon: number | null = null;
 
@@ -295,15 +337,31 @@ export default async function handler(
       `pin-l+f5a623(${lon},${lat})/` +
       `${lon},${lat},${zoom},0/1200x900?access_token=${token}`;
 
+    // Build a location line: Destination · City · Area
+    const locParts = [
+      villa.destination,
+      villa.city,
+      villa.areaname,
+    ].filter(Boolean) as string[];
+
     doc.addPage({ margin: 50 });
-    title("Map");
+    title("Map & Location");
+
+    if (locParts.length) {
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("#111")
+        .text(locParts.join("   •   "), { width: 495, align: "left" });
+      doc.moveDown(0.4);
+    }
 
     doc
       .font("Helvetica")
-      .fontSize(12)
+      .fontSize(11)
       .fillColor("#555")
       .text(
-        "Approximate villa location (exact address available after booking).",
+        "Approximate villa location.",
         { width: 495, align: "left" }
       );
 
@@ -314,10 +372,19 @@ export default async function handler(
       });
       const mapBuffer = Buffer.from(mapRes.data);
 
-      doc.moveDown(1.5);
-      doc.image(mapBuffer, 50, doc.y, {
+      doc.moveDown(1.2);
+      const mapY = doc.y;
+
+      // light card/frame behind map
+      doc
+        .roundedRect(45, mapY - 8, 505, 390, 10)
+        .lineWidth(0.5)
+        .strokeColor("#E5E7EB")
+        .stroke();
+
+      doc.image(mapBuffer, 50, mapY, {
         width: 495,
-        height: 360,
+        height: 370,
         align: "center",
         valign: "center",
       });
