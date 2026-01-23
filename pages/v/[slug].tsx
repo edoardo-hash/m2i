@@ -14,7 +14,12 @@ const OSMMap = dynamic(() => import("../../components/OSMMap"), { ssr: false });
 
 // --- helper types ---
 type Photo = string | { url?: string; src?: string };
-type Prices = { annual?: number | string; monthly?: number | string; summer?: number | string; winter?: number | string };
+type Prices = {
+  annual?: number | string;
+  monthly?: number | string;
+  summer?: number | string;
+  winter?: number | string;
+};
 type Amenity = string | { name?: string; label?: string; group?: string; category?: string };
 
 type Villa = {
@@ -24,7 +29,7 @@ type Villa = {
   city?: any;
   destination?: any;
   description?: any;
-  bp_profile?: any; // might be nested/renamed; we’ll also deep-scan
+  bp_profile?: any;
   mapQuery?: string;
   cover?: string;
   images?: Photo[];
@@ -51,7 +56,6 @@ const toNum = (x: unknown) =>
 const eur = (n: number) =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
-// normalize any API value to a clean string
 const asText = (val: any): string =>
   Array.isArray(val)
     ? val.map((x) => (x?.toString?.() ?? "")).join(" ").trim()
@@ -59,21 +63,32 @@ const asText = (val: any): string =>
     ? val.trim()
     : val?.toString?.() ?? "";
 
-// hero price line
-function priceLine(v: Villa | null): string | undefined {
-  if (!v) return;
+// Prices as column lines
+function priceLines(v: Villa | null): string[] {
+  if (!v) return [];
+
   const pick = (...vals: unknown[]) => {
     const n = vals.map(toNum).find((x) => Number.isFinite(x) && (x as number) > 0);
     return Number.isFinite(n as number) ? (n as number) : undefined;
   };
+
   const winter = pick(v.meta?.prices?.winter, v.price?.winter, v.pricing?.winter, v.rent?.winter);
   const summer = pick(v.meta?.prices?.summer, v.price?.summer, v.pricing?.summer, v.rent?.summer);
-  const annual = pick(v.meta?.prices?.annual, v.priceAnnual, v.yearly, v.price?.annual, v.pricing?.annual, v.rent?.annual);
-  const parts: string[] = [];
-  if (winter) parts.push(`${eur(winter)} / winter`);
-  if (summer) parts.push(`${eur(summer)} / summer`);
-  if (annual) parts.push(`${eur(annual)} / year`);
-  return parts.length ? parts.join(" - ") : undefined;
+  const annual = pick(
+    v.meta?.prices?.annual,
+    v.priceAnnual,
+    v.yearly,
+    v.price?.annual,
+    v.pricing?.annual,
+    v.rent?.annual
+  );
+
+  const lines: string[] = [];
+  if (winter) lines.push(`Winter (November to April): ${eur(winter)}`);
+  if (summer) lines.push(`Summer (May to October): ${eur(summer)}`);
+  if (annual) lines.push(`Annual: ${eur(annual)}`);
+
+  return lines;
 }
 
 const photoSrc = (p?: Photo) => (typeof p === "string" ? p : p?.url || p?.src);
@@ -95,12 +110,37 @@ const BLUR =
 const norm = (s?: string) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const GROUPS_TO_HIDE = new Set<string>(["special features", "suitable for"]);
 const LABELS_TO_HIDE = new Set<string>([
-  "boat usage","breakfast chef","butler","car usage","chef","driver",
-  "eco tax on arrival 2.20€ per day per adult over 15","helicopter pad",
-  "hire car recommended","house manager","live in staff","own water",
-  "pets allowed","solar electricity","staff","waiter/waitress",
-  "couples","events","families","filming","friends","honeymoon","retreats","weddings",
-  "security guard","sunloungers","massage area","dj equipmemt","smart tv","tv - satellite","neighbours"
+  "boat usage",
+  "breakfast chef",
+  "butler",
+  "car usage",
+  "chef",
+  "driver",
+  "eco tax on arrival 2.20€ per day per adult over 15",
+  "helicopter pad",
+  "hire car recommended",
+  "house manager",
+  "live in staff",
+  "own water",
+  "pets allowed",
+  "solar electricity",
+  "staff",
+  "waiter/waitress",
+  "couples",
+  "events",
+  "families",
+  "filming",
+  "friends",
+  "honeymoon",
+  "retreats",
+  "weddings",
+  "security guard",
+  "sunloungers",
+  "massage area",
+  "dj equipmemt",
+  "smart tv",
+  "tv - satellite",
+  "neighbours",
 ]);
 const featureName = (a: Amenity) => (typeof a === "string" ? a : a?.name || a?.label || "");
 const featureGroup = (a: Amenity) => (typeof a === "string" ? "" : a?.group || a?.category || "");
@@ -211,7 +251,7 @@ export default function VillaPage() {
               list.find((x: any) => asText(x.slug) === asText(v?.slug)) ||
               list.find((x: any) => asText(x.title) === asText(v?.title));
             const bp = readBP(match);
-            if (bp) v = { ...v, bp_profile: bp }; // store canonical field for later reads
+            if (bp) v = { ...v, bp_profile: bp };
           }
         }
 
@@ -231,7 +271,7 @@ export default function VillaPage() {
   const where = asText(villa?.location) || asText(villa?.city) || asText(villa?.destination) || "Ibiza";
   const bedrooms = villa?.meta?.bedrooms ?? "—";
   const bathrooms = villa?.meta?.bathrooms ?? "—";
-  const prices = priceLine(villa);
+  const prices = priceLines(villa);
   const lat = (villa as any)?.coords?.lat ?? (villa as any)?.lat ?? 38.984;
   const lng = (villa as any)?.coords?.lng ?? (villa as any)?.lng ?? 1.435;
 
@@ -277,11 +317,7 @@ export default function VillaPage() {
 
   useEffect(() => {
     const current = window.location.hash.replace("#", "");
-    const desired =
-      tab === "desc" ? "description" :
-      tab === "feat" ? "features" :
-      tab === "loc" ? "location" :
-      "gallery";
+    const desired = tab === "desc" ? "description" : tab === "feat" ? "features" : tab === "loc" ? "location" : "gallery";
     if (current !== desired) {
       const url = new URL(window.location.href);
       url.hash = desired;
@@ -297,17 +333,20 @@ export default function VillaPage() {
       </Head>
 
       {/* Header */}
-      <header
-        className="fixed top-0 inset-x-0 z-50 transition-[background-color] duration-150"
-        style={headerStyle}
-      >
+      <header className="fixed top-0 inset-x-0 z-50 transition-[background-color] duration-150" style={headerStyle}>
         <div className="mx-auto max-w-7xl h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-end">
           <nav className={`flex items-center gap-6 text-sm ${light ? "text-white" : "text-slate-800"}`}>
             {/* Desktop */}
             <div className="hidden sm:flex items-center gap-6">
-              <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Home</a>
-              <a href="/#about" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">About</a>
-              <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">Contact</a>
+              <a href="/" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">
+                Home
+              </a>
+              <a href="/#about" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">
+                About
+              </a>
+              <a href="/#contact" className="opacity-90 hover:opacity-100 hover:underline underline-offset-4 decoration-[#C6A36C]">
+                Contact
+              </a>
             </div>
 
             {/* Mobile bottom-sheet trigger */}
@@ -353,9 +392,7 @@ export default function VillaPage() {
 
           <div className="absolute inset-x-0 bottom-6 sm:bottom-8 md:bottom-10">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-              <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-semibold text-white drop-shadow">
-                {title}
-              </h1>
+              <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-semibold text-white drop-shadow">{title}</h1>
 
               <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-1 text-slate-900 text-sm md:text-base ring-1 ring-black/5 shadow-sm">
                 <span>{where}</span>
@@ -424,37 +461,48 @@ export default function VillaPage() {
         )}
       </section>
 
-{prices && (
-  <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6">
-    <div className="flex items-center gap-3 flex-wrap">
-      <div className="inline-flex items-center gap-3 rounded-full bg-white ring-1 ring-slate-200 px-4 py-2 shadow-sm">
-        <span className="text-sm font-medium text-slate-600">Prices</span>
-        <span className="text-sm font-semibold text-slate-900">{prices}</span>
-      </div>
+      {/* Prices + Download PDF */}
+      {prices.length > 0 && (
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6">
+          <div className="flex items-start gap-3 flex-wrap">
+            {/* Column prices card */}
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 px-5 py-3 shadow-sm">
+              <div className="text-sm font-medium text-slate-600">Prices:</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900 leading-6 space-y-0.5">
+                {prices.map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
+              </div>
+            </div>
 
-      {slug ? (
-        <DownloadBrochureButton
-          slug={slug}
-          className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold shadow
-                     Bg-white text-[#1f2937] hover:brightness-95 active:brightness-30
-                     ring-1 ring-black/5"
-        />
-      ) : null}
-    </div>
-  </div>
-)}
+            {slug ? (
+              <DownloadBrochureButton
+                slug={slug}
+                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold shadow
+                           bg-white text-[#1f2937] hover:brightness-95 active:brightness-90
+                           ring-1 ring-black/5"
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Sticky tagline + tabs */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8">
         <div className="sticky top-16 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-slate-200">
           {taglineFull && (
             <div className="mx-auto max-w-5xl px-4">
-              <p className="flex items-center justify-center gap-3 text-center text-[16px] sm:text-lg text-slate-700 py-3 leading-snug" title={taglineFull}>
-                <span aria-hidden className="hidden sm:inline text-[#C6A36C] text-2xl leading-none">“</span>
-                <span className="font-serif italic truncate sm:truncate-none sm:tagline-two-lines">
-                  {taglineFull}
+              <p
+                className="flex items-center justify-center gap-3 text-center text-[16px] sm:text-lg text-slate-700 py-3 leading-snug"
+                title={taglineFull}
+              >
+                <span aria-hidden className="hidden sm:inline text-[#C6A36C] text-2xl leading-none">
+                  “
                 </span>
-                <span aria-hidden className="hidden sm:inline text-[#C6A36C] text-2xl leading-none">”</span>
+                <span className="font-serif italic truncate sm:truncate-none sm:tagline-two-lines">{taglineFull}</span>
+                <span aria-hidden className="hidden sm:inline text-[#C6A36C] text-2xl leading-none">
+                  ”
+                </span>
               </p>
             </div>
           )}
@@ -491,9 +539,7 @@ export default function VillaPage() {
                     <p className="font-serif italic text-[15px] sm:text-base leading-relaxed">“{taglineFull}”</p>
                   </div>
                 )}
-                <p className="text-slate-700 leading-relaxed whitespace-pre-line">
-                  {asText(villa?.description) || "Details coming soon."}
-                </p>
+                <p className="text-slate-700 leading-relaxed whitespace-pre-line">{asText(villa?.description) || "Details coming soon."}</p>
               </section>
             )}
 
@@ -503,7 +549,10 @@ export default function VillaPage() {
                 <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                   {displayedFeatures.length ? (
                     displayedFeatures.map((label, i) => (
-                      <li key={i} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow transition-shadow">
+                      <li
+                        key={i}
+                        className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:shadow transition-shadow"
+                      >
                         <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
                           <CheckIcon className="h-4 w-4" />
                         </span>
@@ -532,7 +581,10 @@ export default function VillaPage() {
                     {images.map((g, i) => (
                       <button
                         key={i}
-                        onClick={() => { setLbStart(i); setLbOpen(true); }}
+                        onClick={() => {
+                          setLbStart(i);
+                          setLbOpen(true);
+                        }}
                         className="relative aspect-[4/3] overflow-hidden ring-1 ring-slate-200 rounded-xl focus:outline-none"
                         aria-label={`Open image ${i + 1}`}
                       >
@@ -563,15 +615,21 @@ export default function VillaPage() {
               <p className="mt-3 text-slate-600 leading-relaxed">
                 <strong>Moving to Ibiza begins with a conversation.</strong>
                 <br />
-                Whether you’re searching for a villa, an apartment, or simply exploring your options,
-                our team is here to guide you. We value privacy, clarity, and personal attention — every
-                enquiry is handled with care and discretion.
-                <br /><br />
+                Whether you’re searching for a villa, an apartment, or simply exploring your options, our team is here to guide
+                you. We value privacy, clarity, and personal attention — every enquiry is handled with care and discretion.
+                <br />
+                <br />
                 Let’s find your place in Ibiza.
                 <br />
-                📧 <a href="mailto:M2Ibiza@inveniohomes.com" className="underline">M2Ibiza@inveniohomes.com</a>
+                📧{" "}
+                <a href="mailto:M2Ibiza@inveniohomes.com" className="underline">
+                  M2Ibiza@inveniohomes.com
+                </a>
                 <br />
-                📞 <a href="tel:+34671349592" className="underline">+34 671 349 592</a>
+                📞{" "}
+                <a href="tel:+34671349592" className="underline">
+                  +34 671 349 592
+                </a>
               </p>
 
               {/* ---- White-label brochure button ---- */}
@@ -599,7 +657,9 @@ export default function VillaPage() {
                     phone ? `Phone: ${phone}` : "",
                     "",
                     message,
-                  ].filter(Boolean).join("\n");
+                  ]
+                    .filter(Boolean)
+                    .join("\n");
 
                   window.open(
                     `mailto:M2Ibiza@inveniohomes.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
@@ -610,7 +670,11 @@ export default function VillaPage() {
                 <input name="email" type="email" placeholder="Email" className="rounded-xl border border-slate-200 px-4 py-3" required />
                 <input name="phone" placeholder="Phone / WhatsApp" className="rounded-xl border border-slate-200 px-4 py-3" />
                 <textarea name="message" rows={5} placeholder="Message" className="rounded-xl border border-slate-200 px-4 py-3" required />
-                <button type="submit" className="mt-2 w-full rounded-full px-5 py-3 font-semibold" style={{ background: "#C6A36C", color: "#1f2937" }}>
+                <button
+                  type="submit"
+                  className="mt-2 w-full rounded-full px-5 py-3 font-semibold"
+                  style={{ background: "#C6A36C", color: "#1f2937" }}
+                >
                   Send inquiry
                 </button>
               </form>
@@ -629,9 +693,24 @@ export default function VillaPage() {
       <WhatsAppButton />
 
       <style jsx global>{`
-        @keyframes m2i-kenburns { 0% { transform: scale(1); } 100% { transform: scale(1.05); } }
-        .kenburns { animation: m2i-kenburns 25s ease-in-out infinite alternate; transform-origin: center; }
-        .tagline-two-lines { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        @keyframes m2i-kenburns {
+          0% {
+            transform: scale(1);
+          }
+          100% {
+            transform: scale(1.05);
+          }
+        }
+        .kenburns {
+          animation: m2i-kenburns 25s ease-in-out infinite alternate;
+          transform-origin: center;
+        }
+        .tagline-two-lines {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
       `}</style>
     </>
   );
