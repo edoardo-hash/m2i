@@ -329,7 +329,7 @@ export default function Home() {
         : `${base} bg-slate-100 text-slate-800 ring-1 ring-slate-200`;
     return (
       <span className={cls}>
-        <strong className="mr-1">{label}</strong> {eur0(value)} / month
+        <strong className="mr-1">{label}</strong> {eur0(value)}/month
       </span>
     );
   };
@@ -486,9 +486,10 @@ export default function Home() {
 
                     {/* Price chips */}
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {hasAnnual && <PriceChip label="Yearly" value={y} tone="gold" />}
-                      {hasSummer && <PriceChip label="Summer" value={s} />}
-                      {hasWinter && <PriceChip label="Winter" value={w} />}
+{hasAnnual && <PriceChip label="Yearly Price" value={y} tone="gold" />}
+{hasSummer && <PriceChip label="Summer Price (November to April)" value={s} />}
+{hasWinter && <PriceChip label="Winter Price (May to October)" value={w} />}
+
                       {!hasAnnual && !hasSummer && !hasWinter && (
                         <span className="text-sm text-slate-400">Price on request</span>
                       )}
