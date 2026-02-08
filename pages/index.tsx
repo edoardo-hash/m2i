@@ -487,8 +487,8 @@ export default function Home() {
                     {/* Price chips */}
                     <div className="mt-3 flex flex-wrap gap-2">
 {hasAnnual && <PriceChip label="Yearly Price" value={y} tone="gold" />}
-{hasSummer && <PriceChip label="Summer Price (November to April)" value={s} />}
-{hasWinter && <PriceChip label="Winter Price (May to October)" value={w} />}
+{hasSummer && <PriceChip label="Summer Price (May to October" value={s} />}
+{hasWinter && <PriceChip label="Winter Price (November to April)" value={w} />}
 
                       {!hasAnnual && !hasSummer && !hasWinter && (
                         <span className="text-sm text-slate-400">Price on request</span>
