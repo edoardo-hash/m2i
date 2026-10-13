@@ -3,6 +3,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import PDFDocument from "pdfkit";
 import axios from "axios";
+import sharp from "sharp";
 
 type InvenioVilla = {
   bp_name: string;
@@ -64,6 +65,33 @@ const filterFeatures = (features: string[] = []) =>
     ].some((bad) => lower.includes(bad));
   });
 
+/**
+ * CDN originals are 4–6 MB each, and pdfkit embeds the bytes as given: a brochure came out at
+ * ~19 MB, too big for chat and WhatsApp delivery. Photos are downscaled before they go in
+ * (cover 1800 px long edge ≈ 150 DPI on A4, gallery 1400 px, JPEG q78) — same recipe as the
+ * Invenio portal brochures, which weigh 3–8 MB. On any error the original bytes are used.
+ */
+const COVER_PX = 1800;
+const GALLERY_PX = 1400;
+
+async function fetchPhoto(url: string, maxPx: number): Promise<Buffer | null> {
+  try {
+    const img = await axios.get(url, { responseType: "arraybuffer", timeout: 15000 });
+    const raw = Buffer.from(img.data);
+    try {
+      return await sharp(raw)
+        .rotate()
+        .resize(maxPx, maxPx, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 78, mozjpeg: true })
+        .toBuffer();
+    } catch {
+      return raw;
+    }
+  } catch {
+    return null;
+  }
+}
+
 const cleanText = (str: string | undefined | null) =>
   (str || "")
     .replace(/Ð/g, "")
@@ -110,20 +138,15 @@ export default async function handler(
    * ======================================================= */
 
   if (villa.photos?.[0]) {
-    try {
-      const img = await axios.get(villa.photos[0], {
-        responseType: "arraybuffer",
-        timeout: 15000,
-      });
-      doc.image(Buffer.from(img.data), 0, 0, { width: 595, height: 842 });
+    const hero = await fetchPhoto(villa.photos[0], COVER_PX);
+    if (hero) {
+      doc.image(hero, 0, 0, { width: 595, height: 842 });
       doc
         .rect(0, 0, 595, 842)
         .fillColor("black")
         .fillOpacity(0.5)
         .fill();
       doc.fillOpacity(1); // reset
-    } catch {
-      // ignore hero load failure
     }
   }
 
@@ -237,18 +260,13 @@ export default async function handler(
   }
 
   if (villa.photos?.[1]) {
-    try {
-      const img = await axios.get(villa.photos[1], {
-        responseType: "arraybuffer",
-        timeout: 15000,
-      });
+    const img = await fetchPhoto(villa.photos[1], GALLERY_PX);
+    if (img) {
       doc.moveDown(2);
-      doc.image(Buffer.from(img.data), 50, doc.y, {
+      doc.image(img, 50, doc.y, {
         width: 495,
         height: 320,
       });
-    } catch {
-      // ignore
     }
   }
 
@@ -288,17 +306,12 @@ export default async function handler(
       if (col === 0 && row > 0) y += 180;
       const x = 50 + col * 305;
 
-      try {
-        const img = await axios.get(url, {
-          responseType: "arraybuffer",
-          timeout: 15000,
-        });
-        doc.image(Buffer.from(img.data), x, y, {
+      const img = await fetchPhoto(url, GALLERY_PX);
+      if (img) {
+        doc.image(img, x, y, {
           width: 240,
           height: 160,
         });
-      } catch {
-        // ignore
       }
     }
   }
