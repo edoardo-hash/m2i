@@ -68,11 +68,15 @@ const filterFeatures = (features: string[] = []) =>
 /**
  * CDN originals are 4–6 MB each, and pdfkit embeds the bytes as given: a brochure came out at
  * ~19 MB, too big for chat and WhatsApp delivery. Photos are downscaled before they go in
- * (cover 1800 px long edge ≈ 150 DPI on A4, gallery 1400 px, JPEG q78) — same recipe as the
- * Invenio portal brochures, which weigh 3–8 MB. On any error the original bytes are used.
+ * (cover 1500 px long edge ≈ 180 DPI at page width, gallery 1100 px ≈ 330 DPI in a 240 pt tile,
+ * JPEG q72) and the gallery stops at GALLERY_MAX, so a brochure stays at a few MB — small
+ * enough for chat and WhatsApp delivery. On any error the original bytes are used.
  */
-const COVER_PX = 1800;
-const GALLERY_PX = 1400;
+const COVER_PX = 1500;
+const GALLERY_PX = 1100;
+const JPEG_QUALITY = 72;
+/** Gallery pages are 6 photos each; four pages keep a 40-photo villa under ~4 MB. */
+const GALLERY_MAX = 24;
 
 async function fetchPhoto(url: string, maxPx: number): Promise<Buffer | null> {
   try {
@@ -82,7 +86,7 @@ async function fetchPhoto(url: string, maxPx: number): Promise<Buffer | null> {
       return await sharp(raw)
         .rotate()
         .resize(maxPx, maxPx, { fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 78, mozjpeg: true })
+        .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
         .toBuffer();
     } catch {
       return raw;
@@ -287,7 +291,7 @@ export default async function handler(
   );
 
   // Gallery
-  const gallery = (villa.photos || []).slice(2);
+  const gallery = (villa.photos || []).slice(2, 2 + GALLERY_MAX);
   let i = 0;
   while (i < gallery.length) {
     doc.addPage({ margin: 50 });
